@@ -52,3 +52,15 @@ void bind_diagnostics(esphome::binary_sensor::BinarySensor *ch,
 
 }  // namespace Sensors
 }  // namespace opentherm
+
+// Helper macros voor compacte toegang in boiler/dhw/equitherm/opentherm
+#define OT_SENSOR(name) ::opentherm::Sensors::name
+
+// Publiceer alleen als de pointer niet null is
+#define PUBLISH_IF(sensor_ptr, value)        \
+  do {                                       \
+    if ((sensor_ptr) != nullptr) {           \
+      (sensor_ptr)->publish_state(value);    \
+    }                                        \
+  } while (0)
+
