@@ -1,9 +1,11 @@
 #pragma once
+
 namespace opentherm {
-class OpenThermComponent;
 namespace Diagnostics {
+
+class OpenThermComponent;
+
 void update(OpenThermComponent *ot);
-bool has_fault();
-void clear_faults();
-} // namespace Diagnostics
-} // namespace opentherm
+
+}  // namespace Diagnostics
+}  // namespace opentherm

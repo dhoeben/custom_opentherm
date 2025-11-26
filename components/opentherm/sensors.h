@@ -1,70 +1,54 @@
 #pragma once
-#include "esphome.h"
+
 #include "esphome/components/sensor/sensor.h"
-#include "esphome/components/number/number.h"
-#include "esphome/components/switch/switch.h"
-#include "esphome/components/text_sensor/text_sensor.h"
 #include "esphome/components/binary_sensor/binary_sensor.h"
-#include "esphome/components/climate/climate.h"
+#include "esphome/components/text_sensor/text_sensor.h"
 
 namespace opentherm {
+namespace Sensors {
 
-// ============================================================================
-//  Central Sensor / Entity Registry
-// ============================================================================
-struct Sensors {
-  // --- Boiler (flow loop) ---
-  esphome::sensor::Sensor *boiler_temp   = nullptr;
-  esphome::sensor::Sensor *return_temp   = nullptr;
-  esphome::sensor::Sensor *modulation    = nullptr;
-  esphome::sensor::Sensor *setpoint      = nullptr;
+// ---------------------------
+// Boiler sensors (F8.8 values)
+// ---------------------------
+extern esphome::sensor::Sensor *boiler_temp;
+extern esphome::sensor::Sensor *return_temp;
+extern esphome::sensor::Sensor *modulation;
+extern esphome::sensor::Sensor *setpoint;
 
-  // --- DHW ---
-  esphome::sensor::Sensor *dhw_temp      = nullptr;
-  esphome::sensor::Sensor *dhw_flow_rate = nullptr;   // optional
+// ---------------------------
+// Diagnostics binary sensors
+// ---------------------------
+extern esphome::binary_sensor::BinarySensor *ch_active;
+extern esphome::binary_sensor::BinarySensor *dhw_active;
+extern esphome::binary_sensor::BinarySensor *flame;
+extern esphome::binary_sensor::BinarySensor *fault;
+extern esphome::binary_sensor::BinarySensor *comms_ok;
 
-  // --- External / HA / helper temps (optional) ---
-  esphome::sensor::Sensor *ha_weather_temp      = nullptr;
-  esphome::sensor::Sensor *ha_indoor_temp       = nullptr;
-  esphome::sensor::Sensor *adaptive_indoor_temp = nullptr;
+// ---------------------------
+// DHW related sensors
+// ---------------------------
+extern esphome::sensor::Sensor *dhw_flow_rate;
 
-  // --- Diagnostics ---
-  esphome::binary_sensor::BinarySensor *ch_active   = nullptr;
-  esphome::binary_sensor::BinarySensor *dhw_active  = nullptr;
-  esphome::binary_sensor::BinarySensor *flame       = nullptr;
-  esphome::binary_sensor::BinarySensor *fault       = nullptr;
-  esphome::binary_sensor::BinarySensor *diagnostic  = nullptr;
-  esphome::binary_sensor::BinarySensor *comms_ok    = nullptr;
-  esphome::binary_sensor::BinarySensor *dhw_flowing = nullptr;
+// ---------------------------
+// Diagnostics text sensors
+// ---------------------------
+extern esphome::text_sensor::TextSensor *fault_text;
 
-  esphome::text_sensor::TextSensor *fault_text = nullptr;
+// ---------------------------
+// Binding helpers
+// ---------------------------
+void bind_boiler_sensors(esphome::sensor::Sensor *temp,
+                         esphome::sensor::Sensor *ret,
+                         esphome::sensor::Sensor *mod,
+                         esphome::sensor::Sensor *setp);
 
-  // --- Limits & parameters ---
-  esphome::number::Number *max_boiler_temp = nullptr;
-  esphome::number::Number *max_dhw_temp    = nullptr;
+void bind_diagnostics(esphome::binary_sensor::BinarySensor *ch,
+                      esphome::binary_sensor::BinarySensor *dhw,
+                      esphome::binary_sensor::BinarySensor *flame_s,
+                      esphome::binary_sensor::BinarySensor *fault_s,
+                      esphome::binary_sensor::BinarySensor *comms,
+                      esphome::sensor::Sensor *flow_rate,
+                      esphome::text_sensor::TextSensor *fault_text_s);
 
-  esphome::number::Number *eq_n = nullptr;
-  esphome::number::Number *eq_k = nullptr;
-  esphome::number::Number *eq_t = nullptr;
-  esphome::number::Number *eq_fb_gain = nullptr;
-
-  // --- Climate entities ---
-  esphome::climate::Climate *ch_climate  = nullptr;
-  esphome::climate::Climate *dhw_climate = nullptr;
-
-  // --- Switches (emergency / dev tools) ---
-  esphome::switch_::Switch *emergency_mode = nullptr;
-  esphome::switch_::Switch *force_heat     = nullptr;
-  esphome::switch_::Switch *force_dhw      = nullptr;
-  esphome::switch_::Switch *developer_mode = nullptr;
-  esphome::switch_::Switch *led_rainbow    = nullptr;
-};
-
-// Global instance
-extern Sensors sensors;
-
-// Helpers
-#define OT_SENSOR(name) ::opentherm::sensors.name
-#define PUBLISH_IF(ptr, value) do { if (ptr) (ptr)->publish_state(value); } while(0)
-
-} // namespace opentherm
+}  // namespace Sensors
+}  // namespace opentherm

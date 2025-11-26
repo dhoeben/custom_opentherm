@@ -201,26 +201,72 @@ bool OpenThermComponent::send_frame(uint32_t frame) {
 }
 
 bool OpenThermComponent::recv_frame(uint32_t &resp) {
-  const int64_t start = esp_timer_get_time();
+  const int64_t overall_start = esp_timer_get_time();
   resp = 0;
-  while ((esp_timer_get_time() - start) < static_cast<int64_t>(rx_timeout_ms_) * 1000) {
+
+  while ((esp_timer_get_time() - overall_start) < static_cast<int64_t>(rx_timeout_ms_) * 1000) {
+    bool last = line_rx_level();
+    int64_t edge_start = esp_timer_get_time();
+    bool edge_found = false;
+
+    while ((esp_timer_get_time() - edge_start) < 2 * BIT_US) {  
+      bool now = line_rx_level();
+      if (now != last) {
+        edge_found = true;
+        last = now;
+        break;
+      }
+    }
+
+    if (!edge_found) {
+      continue;
+    }
+
+    wait_us(HALF_BIT_US);
+
     uint32_t v = 0;
     for (int i = 31; i >= 0; --i) {
-      wait_us(HALF_BIT_US);
       const bool first = line_rx_level();
       wait_us(HALF_BIT_US);
       const bool second = line_rx_level();
-      if (first && !second) v = (v << 1) | 1u;
-      else if (!first && second) v = (v << 1) | 0u;
-      else return false;
+
+      if (first && !second) {
+        v = (v << 1) | 1u;
+      } else if (!first && second) {
+        v = (v << 1);
+      } else {
+        if (debug_) {
+          ESP_LOGW("opentherm",
+                   "Bad Manchester pair (%d%d) tijdens RX, bit index %d – frame verworpen",
+                   first, second, i);
+        }
+        v = 0;
+        goto next_try;
+      }
     }
+
     resp = v;
-    if (((resp & 0x1u) != parity32(resp))) return false;
-    if (debug_) ESP_LOGD(OT_LOG_TAG, "RX frame: 0x%08X", resp);
-    return true;
+    if ((resp & 0x1u) != parity32(resp)) {
+      if (debug_) {
+        ESP_LOGW("opentherm",
+                 "Parity error op RX frame: 0x%08X (LSB parity-bit komt niet overeen)", resp);
+      }
+      resp = 0;
+      goto next_try;
+    }
+
+    if (debug_) {
+      ESP_LOGD("opentherm", "RX frame OK: 0x%08X", resp);
+    }
+    return true; 
+
+  next_try:
+    continue;
   }
+
   return false;
 }
+
 
 uint32_t OpenThermComponent::read_did(uint8_t did) {
   const uint32_t req = build_request(READ_DATA, did, 0);
