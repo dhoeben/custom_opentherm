@@ -11,7 +11,7 @@ AUTO_LOAD = ["sensor", "number", "switch", "climate"]
 # C++ namespace + class binding
 # ------------------------------------------------------------------------------
 
-# Gebruik de bestaande C++ class opentherm::OpenThermComponent
+# Bind naar de bestaande C++ class opentherm::OpenThermComponent
 ot_ns = cg.esphome_ns.namespace("opentherm")
 OpenThermComponent = ot_ns.class_("OpenThermComponent", cg.Component)
 
@@ -45,17 +45,17 @@ CONFIG_SCHEMA = cv.Schema(
         cv.Optional(CONF_RX_TIMEOUT, default="40ms"): cv.positive_time_period_milliseconds,
         cv.Optional(CONF_DEBUG, default=False): cv.boolean,
 
-        # Koppelen aan bestaande sensoren (uit sensors.yaml) via id:
+        # Koppeling met bestaande sensoren (uit sensors.yaml) via id:
         cv.Optional(CONF_BOILER_TEMP): cv.use_id(sensor.Sensor),
         cv.Optional(CONF_RETURN_TEMP): cv.use_id(sensor.Sensor),
         cv.Optional(CONF_MODULATION): cv.use_id(sensor.Sensor),
         cv.Optional(CONF_SETPOINT): cv.use_id(sensor.Sensor),
 
-        # Bestaande number-entities voor limieten
+        # Bestaande number entities voor limieten
         cv.Optional("max_boiler_temp_heating"): cv.use_id(number.Number),
         cv.Optional("max_boiler_temp_water"): cv.use_id(number.Number),
 
-        # Bestaande number-entities voor equitherm tuning
+        # Equitherm tuning
         cv.Optional("eq_fb_gain"): cv.use_id(number.Number),
         cv.Optional("eq_k"): cv.use_id(number.Number),
         cv.Optional("eq_n"): cv.use_id(number.Number),
@@ -83,7 +83,7 @@ async def to_code(config):
     out_pin = await cg.gpio_pin_expression(config[CONF_OUT_PIN])
     cg.add(var.set_pins(in_pin, out_pin))
 
-    # Basic config
+    # Basisconfig
     cg.add(var.set_poll_interval(config[CONF_POLL_INTERVAL]))
     cg.add(var.set_rx_timeout(config[CONF_RX_TIMEOUT]))
     cg.add(var.set_debug(config[CONF_DEBUG]))
