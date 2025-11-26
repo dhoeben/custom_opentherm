@@ -61,10 +61,10 @@ CONFIG_SCHEMA = cv.Schema({
     cv.Optional("eq_t"): number.number_schema,
 
     # Optional linked entities
-    cv.Optional("ch_climate"): climate.CLIMATE_SCHEMA,
-    cv.Optional("emergency_mode"): switch.SWITCH_SCHEMA,
-    cv.Optional("force_heat"): switch.SWITCH_SCHEMA,
-    cv.Optional("force_dhw"): switch.SWITCH_SCHEMA,
+    cv.Optional("ch_climate"): climate.climate_schema,
+    cv.Optional("emergency_mode"): switch.switch_schema,
+    cv.Optional("force_heat"): switch.switch_schema,
+    cv.Optional("force_dhw"): switch.switch_schema,
 
 }).extend(cv.COMPONENT_SCHEMA)
 
