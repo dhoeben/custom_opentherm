@@ -4,6 +4,9 @@ from esphome import pins
 from esphome.components import sensor, number, switch, climate
 from esphome.const import CONF_ID
 
+DEPENDENCIES = []
+AUTO_LOAD = ["sensor", "number", "switch", "climate"]
+
 # ------------------------------------------------------------------------------
 # Namespace + C++ class
 # ------------------------------------------------------------------------------
@@ -134,16 +137,3 @@ async def to_code(config):
     if "force_dhw" in config:
         sw = await switch.new_switch(config["force_dhw"])
         cg.add(var.set_force_dhw_switch(sw))
-
-
-# ------------------------------------------------------------------------------
-# Register YAML key → Component mapping
-# ------------------------------------------------------------------------------
-DEPENDENCIES = []
-AUTO_LOAD = ["sensor", "number", "switch", "climate"]
-
-def _register():
-    from esphome import yaml_util
-    yaml_util.add_component_name("custom_opentherm", CustomOpenThermComponent)
-
-_register()
