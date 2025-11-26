@@ -4,15 +4,21 @@ from esphome import pins
 from esphome.components import sensor, number, switch, climate
 from esphome.const import CONF_ID
 
+DEPENDENCIES = []
+AUTO_LOAD = ["sensor", "number", "switch", "climate"]
+
 # ------------------------------------------------------------------------------
-# Nieuw namespace + nieuwe class
+# C++ namespace + class binding
 # ------------------------------------------------------------------------------
-custom_ot_ns = cg.esphome_ns.namespace("custom_opentherm")
-CustomOpenThermComponent = custom_ot_ns.class_("CustomOpenThermComponent", cg.Component)
+
+# Bind naar de bestaande C++ class opentherm::OpenThermComponent
+ot_ns = cg.esphome_ns.namespace("opentherm")
+OpenThermComponent = ot_ns.class_("OpenThermComponent", cg.Component)
 
 # ------------------------------------------------------------------------------
 # Config keys
 # ------------------------------------------------------------------------------
+
 CONF_IN_PIN = "in_pin"
 CONF_OUT_PIN = "out_pin"
 CONF_POLL_INTERVAL = "poll_interval"
@@ -25,45 +31,49 @@ CONF_MODULATION = "modulation"
 CONF_SETPOINT = "setpoint"
 
 # ------------------------------------------------------------------------------
-# Config schema
+# CONFIG_SCHEMA
 # ------------------------------------------------------------------------------
-CONFIG_SCHEMA = cv.Schema({
-    cv.GenerateID(): cv.declare_id(CustomOpenThermComponent),
 
-    cv.Required(CONF_IN_PIN): pins.gpio_input_pin_schema,
-    cv.Required(CONF_OUT_PIN): pins.gpio_output_pin_schema,
+CONFIG_SCHEMA = cv.Schema(
+    {
+        cv.GenerateID(): cv.declare_id(OpenThermComponent),
 
-    cv.Optional(CONF_POLL_INTERVAL, default="10s"): cv.positive_time_period_milliseconds,
-    cv.Optional(CONF_RX_TIMEOUT, default="40ms"): cv.positive_time_period_milliseconds,
-    cv.Optional(CONF_DEBUG, default=False): cv.boolean,
+        cv.Required(CONF_IN_PIN): pins.gpio_input_pin_schema,
+        cv.Required(CONF_OUT_PIN): pins.gpio_output_pin_schema,
 
-    # OT Sensor bindings
-    cv.Optional(CONF_BOILER_TEMP): sensor.sensor_schema(unit_of_measurement="°C", accuracy_decimals=1, entity_category="diagnostic"),
-    cv.Optional(CONF_RETURN_TEMP): sensor.sensor_schema(unit_of_measurement="°C", accuracy_decimals=1, entity_category="diagnostic"),
-    cv.Optional(CONF_MODULATION): sensor.sensor_schema(unit_of_measurement="%", accuracy_decimals=0, entity_category="diagnostic"),
-    cv.Optional(CONF_SETPOINT): sensor.sensor_schema(unit_of_measurement="°C", accuracy_decimals=1, entity_category="diagnostic"),
+        cv.Optional(CONF_POLL_INTERVAL, default="10s"): cv.positive_time_period_milliseconds,
+        cv.Optional(CONF_RX_TIMEOUT, default="40ms"): cv.positive_time_period_milliseconds,
+        cv.Optional(CONF_DEBUG, default=False): cv.boolean,
 
-    # Limits
-    cv.Optional("max_boiler_temp_heating"): number.NUMBER_SCHEMA,
-    cv.Optional("max_boiler_temp_water"): number.NUMBER_SCHEMA,
+        # Koppeling met bestaande sensoren (uit sensors.yaml) via id:
+        cv.Optional(CONF_BOILER_TEMP): cv.use_id(sensor.Sensor),
+        cv.Optional(CONF_RETURN_TEMP): cv.use_id(sensor.Sensor),
+        cv.Optional(CONF_MODULATION): cv.use_id(sensor.Sensor),
+        cv.Optional(CONF_SETPOINT): cv.use_id(sensor.Sensor),
 
-    # Equitherm tuning
-    cv.Optional("eq_fb_gain"): number.NUMBER_SCHEMA,
-    cv.Optional("eq_k"): number.NUMBER_SCHEMA,
-    cv.Optional("eq_n"): number.NUMBER_SCHEMA,
-    cv.Optional("eq_t"): number.NUMBER_SCHEMA,
+        # Bestaande number entities voor limieten
+        cv.Optional("max_boiler_temp_heating"): cv.use_id(number.Number),
+        cv.Optional("max_boiler_temp_water"): cv.use_id(number.Number),
 
-    # Optional linked entities
-    cv.Optional("ch_climate"): climate.CLIMATE_SCHEMA,
-    cv.Optional("emergency_mode"): switch.SWITCH_SCHEMA,
-    cv.Optional("force_heat"): switch.SWITCH_SCHEMA,
-    cv.Optional("force_dhw"): switch.SWITCH_SCHEMA,
+        # Equitherm tuning
+        cv.Optional("eq_fb_gain"): cv.use_id(number.Number),
+        cv.Optional("eq_k"): cv.use_id(number.Number),
+        cv.Optional("eq_n"): cv.use_id(number.Number),
+        cv.Optional("eq_t"): cv.use_id(number.Number),
 
-}).extend(cv.COMPONENT_SCHEMA)
+        # Optionele gekoppelde entiteiten
+        cv.Optional("ch_climate"): cv.use_id(climate.Climate),
+        cv.Optional("emergency_mode"): cv.use_id(switch.Switch),
+        cv.Optional("force_heat"): cv.use_id(switch.Switch),
+        cv.Optional("force_dhw"): cv.use_id(switch.Switch),
+    }
+).extend(cv.COMPONENT_SCHEMA)
+
 
 # ------------------------------------------------------------------------------
-# Codegen (async)
+# to_code
 # ------------------------------------------------------------------------------
+
 async def to_code(config):
     var = cg.new_Pvariable(config[CONF_ID])
     await cg.register_component(var, config)
@@ -73,56 +83,62 @@ async def to_code(config):
     out_pin = await cg.gpio_pin_expression(config[CONF_OUT_PIN])
     cg.add(var.set_pins(in_pin, out_pin))
 
-    # Basic config
+    # Basisconfig
     cg.add(var.set_poll_interval(config[CONF_POLL_INTERVAL]))
     cg.add(var.set_rx_timeout(config[CONF_RX_TIMEOUT]))
     cg.add(var.set_debug(config[CONF_DEBUG]))
 
-    # Sensors
+    # Sensor binding (naar bestaande sensoren met id in sensors.yaml)
     if CONF_BOILER_TEMP in config:
-        sens = await sensor.new_sensor(config[CONF_BOILER_TEMP])
+        sens = await cg.get_variable(config[CONF_BOILER_TEMP])
         cg.add(var.set_boiler_temp_sensor(sens))
 
     if CONF_RETURN_TEMP in config:
-        sens = await sensor.new_sensor(config[CONF_RETURN_TEMP])
+        sens = await cg.get_variable(config[CONF_RETURN_TEMP])
         cg.add(var.set_return_temp_sensor(sens))
 
     if CONF_MODULATION in config:
-        sens = await sensor.new_sensor(config[CONF_MODULATION])
+        sens = await cg.get_variable(config[CONF_MODULATION])
         cg.add(var.set_modulation_sensor(sens))
 
     if CONF_SETPOINT in config:
-        sens = await sensor.new_sensor(config[CONF_SETPOINT])
+        sens = await cg.get_variable(config[CONF_SETPOINT])
         cg.add(var.set_setpoint_sensor(sens))
 
     # Limit numbers
     if "max_boiler_temp_heating" in config:
-        num = await number.new_number(config["max_boiler_temp_heating"])
+        num = await cg.get_variable(config["max_boiler_temp_heating"])
         cg.add(var.set_boiler_limit_number(num))
 
     if "max_boiler_temp_water" in config:
-        num = await number.new_number(config["max_boiler_temp_water"])
+        num = await cg.get_variable(config["max_boiler_temp_water"])
         cg.add(var.set_dhw_limit_number(num))
 
-    # Equitherm numbers
-    for key in ["eq_fb_gain", "eq_k", "eq_n", "eq_t"]:
+    # Equitherm tuning numbers
+    for key, setter in [
+        ("eq_fb_gain", "set_eq_fb_gain_number"),
+        ("eq_k", "set_eq_k_number"),
+        ("eq_n", "set_eq_n_number"),
+        ("eq_t", "set_eq_t_number"),
+    ]:
         if key in config:
-            num = await number.new_number(config[key])
-            cg.add(getattr(var, f"set_{key}_number")(num))
+            num = await cg.get_variable(config[key])
+            cg.add(getattr(var, setter)(num))
 
-    # Optional climate + switches
+    # Optionele climate entity
     if "ch_climate" in config:
-        c = await climate.new_climate(config["ch_climate"])
-        cg.add(var.set_climate_entity(c))
+        climate_entity = await cg.get_variable(config["ch_climate"])
+        cg.add(var.set_climate_entity(climate_entity))
 
+    # Optionele switches
     if "emergency_mode" in config:
-        s = await switch.new_switch(config["emergency_mode"])
-        cg.add(var.set_emergency_switch(s))
+        sw = await cg.get_variable(config["emergency_mode"])
+        cg.add(var.set_emergency_switch(sw))
 
     if "force_heat" in config:
-        s = await switch.new_switch(config["force_heat"])
-        cg.add(var.set_force_heat_switch(s))
+        sw = await cg.get_variable(config["force_heat"])
+        cg.add(var.set_force_heat_switch(sw))
 
     if "force_dhw" in config:
-        s = await switch.new_switch(config["force_dhw"])
-        cg.add(var.set_force_dhw_switch(s))
+        sw = await cg.get_variable(config["force_dhw"])
+        cg.add(var.set_force_dhw_switch(sw))
