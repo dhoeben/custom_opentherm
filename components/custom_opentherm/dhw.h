@@ -2,7 +2,7 @@
 #include "esphome/components/sensor/sensor.h"
 #include "esphome/components/number/number.h"
 #include "esphome/components/climate/climate.h"
-#include "opentherm_defs.h"
+#include "definitions.h"
 
 namespace opentherm {
 

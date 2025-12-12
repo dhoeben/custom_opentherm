@@ -1,7 +1,7 @@
 #pragma once
 #include "esphome/components/sensor/sensor.h"
 #include "esphome/components/number/number.h"
-#include "opentherm_defs.h"
+#include "definitions.h"
 
 namespace opentherm {
 

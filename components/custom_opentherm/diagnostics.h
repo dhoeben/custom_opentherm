@@ -2,7 +2,7 @@
 #include "esphome/components/sensor/sensor.h"
 #include "esphome/components/text_sensor/text_sensor.h"
 #include "esphome/components/binary_sensor/binary_sensor.h"
-#include "opentherm_defs.h"
+#include "definitions.h"
 #include <string>
 
 namespace opentherm {
