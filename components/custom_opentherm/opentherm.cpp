@@ -97,71 +97,82 @@ void OpenThermComponent::setup() {
 
 void OpenThermComponent::loop() {
   const uint32_t now = millis();
-  if (now - last_poll_ms_ < poll_interval_ms_) return;
-  last_poll_ms_ = now;
 
-  float flow_target = 0.0f;
+  if (now - last_poll_ms_ > poll_interval_ms_) {
+    last_poll_ms_ = now;
+
+    float flow_target = 0.0f;
 
 #if ENABLE_EMERGENCY_MODULE
-  if (Emergency::is_active()) {
-    flow_target = Emergency::get_target();
-    ESP_LOGW(OT_LOG_TAG, "Emergency override → %.1f°C", flow_target);
-  } else
+    if (Emergency::is_active()) {
+      flow_target = Emergency::get_target();
+      ESP_LOGW(OT_LOG_TAG, "Emergency override → %.1f°C", flow_target);
+    } else
 #endif
-  if (g_compensation_mode == CompensationMode::EQUITHERM) {
+    if (g_compensation_mode == CompensationMode::EQUITHERM) {
 #if ENABLE_EQUITHERM_MODULE
-    flow_target = Equitherm::calculate_target_temp();
-    ESP_LOGD(OT_LOG_TAG, "Equitherm flow target (pre-clamp): %.1f°C", flow_target);
+      flow_target = Equitherm::calculate_target_temp();
+      ESP_LOGD(OT_LOG_TAG, "Equitherm flow target (pre-clamp): %.1f°C", flow_target);
 #else
-    flow_target = DEFAULT_MIN_FLOW_TEMP;
+      flow_target = DEFAULT_MIN_FLOW_TEMP;
 #endif
-  } else {
-    // Boiler internal curve path (send DID 0x1C if outdoor temp available)
-    auto *t_out = OT_SENSOR(ha_weather_temp);
-    if (t_out && t_out->has_state()) {
-      float v = t_out->state;
-      uint16_t raw = static_cast<uint16_t>(v * 256.0f);
-      uint32_t frame = build_request(WRITE_DATA, 0x1C, raw);
-      send_frame(frame);
-      ESP_LOGI(OT_LOG_TAG, "Boiler mode: sent T_out=%.1f°C (DID 0x1C)", v);
     } else {
-      ESP_LOGW(OT_LOG_TAG, "Boiler mode active, but no outdoor temperature bound.");
+      auto *t_out = OT_SENSOR(ha_weather_temp);
+      if (t_out && t_out->has_state()) {
+        float v = t_out->state;
+        uint16_t raw = static_cast<uint16_t>(v * 256.0f);
+        uint32_t frame = build_request(WRITE_DATA, 0x1C, raw);
+        send_frame(frame); 
+        ESP_LOGI(OT_LOG_TAG, "Boiler mode: sent T_out=%.1f°C (DID 0x1C)", v);
+      }
     }
-  }
 
-  // Limit enforcement (DHW vs CH)
-  float heating_limit = OT_SENSOR(max_boiler_temp) && OT_SENSOR(max_boiler_temp)->has_state()
-                        ? OT_SENSOR(max_boiler_temp)->state
-                        : DEFAULT_MAX_HEATING_TEMP;
-  float dhw_limit = OT_SENSOR(max_dhw_temp) && OT_SENSOR(max_dhw_temp)->has_state()
-                        ? OT_SENSOR(max_dhw_temp)->state
-                        : DEFAULT_MAX_DHW_TEMP;
+    float heating_limit = OT_SENSOR(max_boiler_temp) && OT_SENSOR(max_boiler_temp)->has_state()
+                          ? OT_SENSOR(max_boiler_temp)->state
+                          : DEFAULT_MAX_HEATING_TEMP;
+    float dhw_limit = OT_SENSOR(max_dhw_temp) && OT_SENSOR(max_dhw_temp)->has_state()
+                          ? OT_SENSOR(max_dhw_temp)->state
+                          : DEFAULT_MAX_DHW_TEMP;
 
-  const bool dhw_active_now = this->tap_flow();
-  const float active_limit = dhw_active_now ? dhw_limit : heating_limit;
-  if (flow_target > active_limit) flow_target = active_limit;
+    const bool dhw_active_now = this->tap_flow();
+    const float active_limit = dhw_active_now ? dhw_limit : heating_limit;
+    if (flow_target > active_limit) flow_target = active_limit;
 
-  if (g_compensation_mode == CompensationMode::EQUITHERM
+    if (g_compensation_mode == CompensationMode::EQUITHERM
 #if ENABLE_EMERGENCY_MODULE
-      || Emergency::is_active()
+        || Emergency::is_active()
 #endif
-  ) {
-    const uint16_t raw = static_cast<uint16_t>(flow_target * 256.0f);
-    const uint32_t frame = build_request(WRITE_DATA, 0x11, raw);
-    send_frame(frame);
-    if (debug_) ESP_LOGI(OT_LOG_TAG, "Flow setpoint sent = %.1f°C", flow_target);
-  }
+    ) {
+      const uint16_t raw = static_cast<uint16_t>(flow_target * 256.0f);
+      const uint32_t frame = build_request(WRITE_DATA, 0x11, raw);
+      send_frame(frame);
+      if (debug_) ESP_LOGI(OT_LOG_TAG, "Flow setpoint sent = %.1f°C", flow_target);
+    }
 
 #if ENABLE_DIAGNOSTICS_MODULE
-  Diagnostics::update(this);
+    Diagnostics::update(this);
 #endif
 #if ENABLE_DHW_MODULE
-  DHW::update(this);
+    DHW::update(this);
 #endif
-  Boiler::update(this);
+    Boiler::update(this); 
+  }
+
+  if (!request_queue_.empty() && (now - last_request_ms_ > 100)) { 
+    last_request_ms_ = now;
+
+    uint8_t did = request_queue_.front();
+    request_queue_.pop();
+
+    uint32_t response = read_did(did);
+
+    if (response != 0) {
+      process_response(did, response);
+    }
+  }
 }
 
-// --- Framing helpers (unchanged) ---
+// --- Framing helpers  ---
 uint8_t OpenThermComponent::parity32(uint32_t v) {
   v >>= 1; v ^= v >> 16; v ^= v >> 8; v ^= v >> 4; v &= 0xF;
   static const uint8_t lut[16] = {0,1,1,0,1,0,0,1,1,0,0,1,0,1,1,0};
@@ -284,4 +295,32 @@ float OpenThermComponent::parse_f88(uint16_t raw) {
   return static_cast<int16_t>(raw) / 256.0f;
 }
 
+void OpenThermComponent::process_response(uint8_t did, uint32_t response) {
+  uint16_t data = (response >> 8) & 0xFFFF;
+  float value = parse_f88(data);
+
+  switch (did) {
+    // Boiler
+    case 0x18: if (boiler_temp_) boiler_temp_->publish_state(value); break;
+    case 0x19: if (return_temp_) return_temp_->publish_state(value); break;
+    case 0x11: if (modulation_) modulation_->publish_state(value); break;
+    
+    // Diagnostics
+    case 0x00: Diagnostics::process_status(data); break;
+    case 0x01: Diagnostics::process_fault_flags(data); break;
+    case 0x3E: Diagnostics::process_flow_rate(value); break;
+    
+    // DHW
+    case 0x33: DHW::process_comfort_mode_response(data); break;
+    
+    default:
+      if (debug_) ESP_LOGD(OT_LOG_TAG, "Reading ID 0x%02X not found", did);
+      break;
+  }
+  
+  if (debug_) {
+      ESP_LOGD(OT_LOG_TAG, "Processed 0x%02X", did);
+  }
+}
+}
 } // namespace opentherm

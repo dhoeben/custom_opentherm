@@ -22,6 +22,12 @@ void set_forced(bool on) {
   ESP_LOGI(TAG, "Forced DHW mode %s", on ? "ENABLED" : "DISABLED");
 }
 
+void process_comfort_mode_response(uint16_t data) {
+    const uint8_t mode = data >> 8;
+    comfort_mode_enabled = (mode == 2);
+    ESP_LOGD(TAG, "Comfort mode status updated: %s", comfort_mode_enabled ? "Enabled" : "Disabled");
+}
+
 void update(OpenThermComponent *ot) {
 #if !ENABLE_DHW_MODULE
   (void)ot;
@@ -29,18 +35,15 @@ void update(OpenThermComponent *ot) {
 #endif
   if (!ot) return;
 
-  // Forced
   if (forced) {
     const float temp = 60.0f;
     const uint16_t raw = static_cast<uint16_t>(temp * 256.0f);
     const uint32_t frame = OpenThermComponent::build_request(WRITE_DATA, 0x38, raw);
     ot->send_frame(frame);
-    ESP_LOGW(TAG, "Forced DHW heating active at %.1f°C", temp);
     return;
   }
 
-  // Sync comfort mode from boiler (0x33)
-  update_comfort_mode(ot);
+  ot->enqueue_request(0x33); 
 
   // Compute setpoint
   float setpoint = 60.0f; // default
@@ -53,18 +56,12 @@ void update(OpenThermComponent *ot) {
   if (setpoint < MIN_DHW_TEMP && current_mode != Mode::OFF) setpoint = MIN_DHW_TEMP;
   if (setpoint > limit) setpoint = limit;
 
-  // Send (0x38)
   const uint16_t raw = static_cast<uint16_t>(setpoint * 256.0f);
   const uint32_t frame = OpenThermComponent::build_request(WRITE_DATA, 0x38, raw);
   ot->send_frame(frame);
 
-  // Comfort preheat (0x33)
   if (current_mode == Mode::HEAT) set_comfort_mode(ot, comfort_mode_enabled);
   else if (current_mode == Mode::OFF) set_comfort_mode(ot, false);
-
-  ESP_LOGI(TAG, "HVAC=%s | Comfort=%s | Setpoint=%.1f°C",
-           (current_mode == Mode::OFF ? "OFF" : "HEAT"),
-           (comfort_mode_enabled ? "Comfort" : "Eco"), setpoint);
 
   // Sync to HA climate
   if (dhw_climate) {
@@ -89,10 +86,8 @@ void set_enabled(OpenThermComponent *ot, bool enabled) {
   if (!ot) return;
   if (!enabled) {
     current_mode = Mode::OFF;
-    ESP_LOGI(TAG, "HVAC OFF → DHW disabled");
   } else {
     if (current_mode == Mode::OFF) current_mode = Mode::HEAT;
-    ESP_LOGI(TAG, "HVAC HEAT → DHW enabled");
   }
   update(ot);
 }
@@ -102,27 +97,15 @@ void set_target_temp(OpenThermComponent *ot, float temp) {
   const uint16_t raw = static_cast<uint16_t>(temp * 256.0f);
   const uint32_t frame = OpenThermComponent::build_request(WRITE_DATA, 0x38, raw);
   ot->send_frame(frame);
-  ESP_LOGI(TAG, "Manual DHW target set to %.1f°C", temp);
 }
 
 void set_comfort_mode(OpenThermComponent *ot, bool enabled) {
   if (!ot) return;
-  comfort_mode_enabled = enabled;
-  const uint8_t mode = comfort_mode_enabled ? 2 : 1; // 2=Continuous, 1=On-demand
+  
+  const uint8_t mode = enabled ? 2 : 1; 
   const uint16_t data = static_cast<uint16_t>(mode) << 8;
   const uint32_t frame = OpenThermComponent::build_request(WRITE_DATA, 0x33, data);
   ot->send_frame(frame);
-  ESP_LOGI(TAG, "Comfort mode = %s", comfort_mode_enabled ? "Comfort" : "Eco");
-}
-
-void update_comfort_mode(OpenThermComponent *ot) {
-  if (!ot) return;
-  const uint32_t raw33 = ot->read_did(0x33);
-  if (raw33 != 0) {
-    const uint16_t data = (raw33 >> 8) & 0xFFFF;
-    const uint8_t mode = data >> 8;
-    comfort_mode_enabled = (mode == 2);
-  }
 }
 
 } // namespace DHW

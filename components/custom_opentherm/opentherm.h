@@ -1,4 +1,5 @@
 #pragma once
+#include <queue>
 #include "config.h"
 #include "esphome.h"
 #include "driver/gpio.h"
@@ -81,6 +82,9 @@ class OpenThermComponent : public esphome::Component {
 
   static OpenThermComponent* get_singleton();
 
+  // Queue
+  void enqueue_request(uint8_t did) { request_queue_.push(did); }
+
  private:
   // IO
   esphome::InternalGPIOPin *in_pin_{nullptr};
@@ -134,9 +138,15 @@ class OpenThermComponent : public esphome::Component {
   esphome::switch_::Switch    *emergency_sw_{nullptr};
   esphome::switch_::Switch    *force_heat_sw_{nullptr};
   esphome::switch_::Switch    *force_dhw_sw_{nullptr};
+
+  // Queue
+  std::queue<uint8_t> request_queue_;
+  uint32_t last_request_ms_{0};
+
+  void process_response(uint8_t did, uint32_t response);
 };
 
-// Global mode API (unchanged)
+// Global mode API 
 extern CompensationMode g_compensation_mode;
 void set_compensation_mode(CompensationMode m);
 void set_compensation_mode_from_string(const std::string &s);

@@ -15,7 +15,6 @@ static uint32_t last_rx_time = 0;
 
 static std::string decode_fault_flags(uint16_t data) {
   std::vector<std::string> faults;
-
   if (data & (1 << 0)) faults.push_back("Service Required");
   if (data & (1 << 1)) faults.push_back("Lockout Active");
   if (data & (1 << 2)) faults.push_back("Low Water Pressure");
@@ -34,7 +33,7 @@ static std::string decode_fault_flags(uint16_t data) {
   if (data & (1 << 15)) faults.push_back("Unknown Fault");
 
   if (faults.empty()) return "No faults";
-
+  
   std::string result;
   for (size_t i = 0; i < faults.size(); ++i) {
     result += faults[i];
@@ -43,19 +42,9 @@ static std::string decode_fault_flags(uint16_t data) {
   return result;
 }
 
-void update(OpenThermComponent *ot) {
-  if (!ot) return;
-
-  const uint32_t now = millis();
-  bool comms_ok = false;
-
-  const uint32_t raw00 = ot->read_did(0x00);
-  if (raw00 != 0) {
-    comms_ok = true;
-    last_rx_time = now;
-
-    const uint16_t data = (raw00 >> 8) & 0xFFFF;
-
+void process_status(uint16_t data) {
+    last_rx_time = millis(); 
+    
     const bool is_fault  = data & (1 << 0);
     const bool ch        = data & (1 << 1);
     const bool dhw       = data & (1 << 2);
@@ -65,28 +54,38 @@ void update(OpenThermComponent *ot) {
     if (Sensors::ch_active)  Sensors::ch_active->publish_state(ch);
     if (Sensors::dhw_active) Sensors::dhw_active->publish_state(dhw);
     if (Sensors::flame)      Sensors::flame->publish_state(flame);
-  }
+}
 
-  const uint32_t raw01 = ot->read_did(0x01);
-  if (raw01 != 0 && Sensors::fault_text != nullptr) {
-    const uint16_t data = (raw01 >> 8) & 0xFFFF;
-    Sensors::fault_text->publish_state(decode_fault_flags(data));
-  }
+void process_fault_flags(uint16_t data) {
+    if (Sensors::fault_text != nullptr) {
+        Sensors::fault_text->publish_state(decode_fault_flags(data));
+    }
+}
 
-  const uint32_t raw3E = ot->read_did(0x3E);
-  if (raw3E != 0 && Sensors::dhw_flow_rate != nullptr) {
-    const uint16_t data = (raw3E >> 8) & 0xFFFF;
-    Sensors::dhw_flow_rate->publish_state(ot->parse_f88(data));
-  }
+void process_flow_rate(float value) {
+    if (Sensors::dhw_flow_rate != nullptr) {
+        Sensors::dhw_flow_rate->publish_state(value);
+    }
+}
+
+void update(OpenThermComponent *ot) {
+  if (!ot) return;
+  const uint32_t now = millis();
 
   if (Sensors::comms_ok) {
-    const bool timed_out = (now - last_rx_time) > 60000;
-    const bool state = comms_ok || !timed_out;
-
-    if (state != last_comms_ok) {
-      Sensors::comms_ok->publish_state(state);
-      last_comms_ok = state;
+    const bool timed_out = (now - last_rx_time) > 60000; 
+    
+    if (!timed_out != last_comms_ok) {
+      last_comms_ok = !timed_out;
+      Sensors::comms_ok->publish_state(last_comms_ok);
     }
+  }
+
+  ot->enqueue_request(0x00); // Status
+  ot->enqueue_request(0x01); // Fault flags
+  
+  if (Sensors::dhw_flow_rate != nullptr) {
+     ot->enqueue_request(0x3E); // Flow rate
   }
 }
 

@@ -21,7 +21,7 @@ void set_enabled(OpenThermComponent *ot, bool enabled);
 void set_target_temp(OpenThermComponent *ot, float temp);
 void set_mode(OpenThermComponent *ot, Mode mode);
 void set_comfort_mode(OpenThermComponent *ot, bool enabled);
-void update_comfort_mode(OpenThermComponent *ot);
+void process_comfort_mode_response(uint16_t data);
 void set_forced(bool on);
 
 } // namespace DHW
