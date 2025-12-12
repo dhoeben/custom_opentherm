@@ -1,0 +1,30 @@
+---
+Language:        Cpp
+BasedOnStyle:    Google
+
+# --- TAB INSTELLINGEN ---
+IndentWidth:     4
+
+# --- SPATIES & UITLIJNING ---
+SpacesInContainerLiterals: true
+SpaceBeforeAssignmentOperators: true
+
+# Uitlijnen van = (voor je enums) -> AAN
+AlignConsecutiveAssignments: true
+
+# Uitlijnen van declaraties (jouw variabalen) -> UIT
+AlignConsecutiveDeclarations: false
+
+# Uitlijnen van commentaar -> AAN
+AlignTrailingComments: true
+
+# --- FORMATTERING ---
+ColumnLimit:     120
+SortIncludes:    true
+BreakBeforeBraces: Attach
+MaxEmptyLinesToKeep: 1
+AllowShortFunctionsOnASingleLine: Empty
+
+# --- PARAMETERS ONDER ELKAAR ---
+BinPackParameters: false
+BinPackArguments: false

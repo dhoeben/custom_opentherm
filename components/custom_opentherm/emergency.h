@@ -1,22 +1,37 @@
 #pragma once
-namespace esphome { namespace switch_ { class Switch; } }
+#include "esphome/components/switch/switch.h"
 
 namespace opentherm {
-namespace Emergency {
 
-void enable(bool state);
-void set_target(float temp);
-float get_target();
-bool is_active();
+class EmergencyModule {
+   public:
+    bool is_active() const {
+        return active_;
+    }
+    float get_target() const {
+        return manual_target_;
+    }
 
-// Linked to HA switches (optionally)
-extern esphome::switch_::Switch *emergency_switch;
-extern esphome::switch_::Switch *force_heat_switch;
-extern esphome::switch_::Switch *force_dhw_switch;
+    void enable(bool state);
+    void set_target(float t) {
+        manual_target_ = t;
+    }
 
-// Internal (optional)
-extern bool  active;
-extern float manual_target;
+    void set_switches(esphome::switch_::Switch *em,
+                      esphome::switch_::Switch *force_heat,
+                      esphome::switch_::Switch *force_dhw) {
+        emergency_switch_  = em;
+        force_heat_switch_ = force_heat;
+        force_dhw_switch_  = force_dhw;
+    }
 
-} // namespace Emergency
-} // namespace opentherm
+   private:
+    bool active_{false};
+    float manual_target_{60.0f};
+
+    esphome::switch_::Switch *emergency_switch_{nullptr};
+    esphome::switch_::Switch *force_heat_switch_{nullptr};
+    esphome::switch_::Switch *force_dhw_switch_{nullptr};
+};
+
+}  // namespace opentherm

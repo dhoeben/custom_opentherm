@@ -1,287 +1,225 @@
 #include "opentherm.h"
-#include "config.h"
-#include "sensors.h"
-#include "boiler.h"
-#include "dhw.h"
-#include "equitherm.h"
-#include "diagnostics.h"
-#include "emergency.h"
-#include "esphome/components/number/number.h"
 
-using namespace esphome;
+#include "esphome/core/log.h"
 
 namespace opentherm {
 
+static const char *const TAG = "opentherm";
+
 static OpenThermComponent *g_singleton = nullptr;
 
-// Mode default
 CompensationMode g_compensation_mode = CompensationMode::EQUITHERM;
 
-void set_compensation_mode(CompensationMode m) { g_compensation_mode = m; }
-void set_compensation_mode_from_string(const std::string &s) {
-  if (s == "Boiler" || s == "boiler") {
-    g_compensation_mode = CompensationMode::BOILER;
-    ESP_LOGI(OT_LOG_TAG, "Compensation mode: BOILER (internal curve).");
-  } else {
-    g_compensation_mode = CompensationMode::EQUITHERM;
-    ESP_LOGI(OT_LOG_TAG, "Compensation mode: EQUITHERM (external setpoint).");
-  }
+void set_compensation_mode(CompensationMode m) {
+    g_compensation_mode = m;
 }
 
-OpenThermComponent *OpenThermComponent::get_singleton() { return g_singleton; }
-OpenThermComponent::OpenThermComponent() { g_singleton = this; }
+void set_compensation_mode_from_string(const std::string &s) {
+    if (s == "Boiler" || s == "boiler") {
+        g_compensation_mode = CompensationMode::BOILER;
+        ESP_LOGI(TAG, "Compensation mode: BOILER (internal curve).");
+    } else {
+        g_compensation_mode = CompensationMode::EQUITHERM;
+        ESP_LOGI(TAG, "Compensation mode: EQUITHERM (external setpoint).");
+    }
+}
+
+OpenThermComponent *OpenThermComponent::get_singleton() {
+    return g_singleton;
+}
+
+static constexpr uint32_t HALF_BIT_US = 500;
+static constexpr uint32_t BIT_US      = 1000;
+
+OpenThermComponent::OpenThermComponent() {
+    g_singleton = this;
+}
 
 void OpenThermComponent::setup() {
-  if (in_pin_)  in_pin_->setup();
-  if (out_pin_) out_pin_->setup();
-  line_tx_level(true); // idle high
+    if (in_pin_) in_pin_->setup();
+    if (out_pin_) {
+        out_pin_->setup();
+        out_pin_->digital_write(true);
+    }
 
-  ESP_LOGI(OT_LOG_TAG, "Pins IN=%d OUT=%d, poll=%u ms, timeout=%u ms, debug=%d",
-           in_pin_ ? in_pin_->get_pin() : OT_IN_PIN,
-           out_pin_ ? out_pin_->get_pin() : OT_OUT_PIN,
-           poll_interval_ms_, rx_timeout_ms_, debug_);
+    boiler_.setup();
+    dhw_.setup();
 
-  // -----------------------------------------------------------------------
-  // Central sensor registry binding
-  // -----------------------------------------------------------------------
-  OT_SENSOR(boiler_temp) = boiler_temp_;
-  OT_SENSOR(return_temp) = return_temp_;
-  OT_SENSOR(modulation)  = modulation_;
-  OT_SENSOR(setpoint)    = setpoint_;
-  OT_SENSOR(dhw_temp)    = dhw_temp_;
-
-  OT_SENSOR(ha_weather_temp)      = ha_weather_;
-  OT_SENSOR(ha_indoor_temp)       = ha_indoor_;
-  OT_SENSOR(adaptive_indoor_temp) = adaptive_indoor_;
-  OT_SENSOR(dhw_flow_rate)        = dhw_flow_rate_;
-
-  OT_SENSOR(max_boiler_temp) = boiler_limit_;
-  OT_SENSOR(max_dhw_temp)    = dhw_limit_;
-
-  OT_SENSOR(eq_n)       = eq_n_;
-  OT_SENSOR(eq_k)       = eq_k_;
-  OT_SENSOR(eq_t)       = eq_t_;
-  OT_SENSOR(eq_fb_gain) = eq_fb_;
-
-  OT_SENSOR(ch_climate) = ch_climate_;
-
-  // NOTE: External/HA sensors & optional diagnostics are linked in a future pass
-  // (they are safe to remain nullptr; code uses defaults if missing)
-
-  // Boiler numbers defaults (visible traits)
-  using namespace esphome::number;
-  if (boiler_limit_) {
-    Boiler::max_heating_temp = boiler_limit_;
-    boiler_limit_->set_name("Max Boiler Temp Heating");
-    boiler_limit_->traits.set_min_value(30);
-    boiler_limit_->traits.set_max_value(90);
-    boiler_limit_->traits.set_step(1);
-    if (!boiler_limit_->has_state())
-      boiler_limit_->publish_state(DEFAULT_MAX_HEATING_TEMP);
-  } else {
-    ESP_LOGW(OT_LOG_TAG, "No boiler limit number configured.");
-  }
-
-  if (dhw_limit_) {
-    DHW::max_water_temp = dhw_limit_;
-    dhw_limit_->set_name("Max DHW Temp");
-    dhw_limit_->traits.set_min_value(30);
-    dhw_limit_->traits.set_max_value(90);
-    dhw_limit_->traits.set_step(1);
-    if (!dhw_limit_->has_state())
-      dhw_limit_->publish_state(DEFAULT_MAX_DHW_TEMP);
-  } else {
-    ESP_LOGW(OT_LOG_TAG, "No DHW limit number configured.");
-  }
+    ESP_LOGI(TAG, "OpenTherm Component Setup Complete");
 }
 
 void OpenThermComponent::loop() {
-  const uint32_t now = millis();
-  if (now - last_poll_ms_ < poll_interval_ms_) return;
-  last_poll_ms_ = now;
+    uint32_t now = esphome::millis();
 
-  float flow_target = 0.0f;
+    if (now - last_poll_ms_ > poll_interval_ms_) {
+        last_poll_ms_ = now;
 
-#if ENABLE_EMERGENCY_MODULE
-  if (Emergency::is_active()) {
-    flow_target = Emergency::get_target();
-    ESP_LOGW(OT_LOG_TAG, "Emergency override → %.1f°C", flow_target);
-  } else
-#endif
-  if (g_compensation_mode == CompensationMode::EQUITHERM) {
-#if ENABLE_EQUITHERM_MODULE
-    flow_target = Equitherm::calculate_target_temp();
-    ESP_LOGD(OT_LOG_TAG, "Equitherm flow target (pre-clamp): %.1f°C", flow_target);
-#else
-    flow_target = DEFAULT_MIN_FLOW_TEMP;
-#endif
-  } else {
-    // Boiler internal curve path (send DID 0x1C if outdoor temp available)
-    auto *t_out = OT_SENSOR(ha_weather_temp);
-    if (t_out && t_out->has_state()) {
-      float v = t_out->state;
-      uint16_t raw = static_cast<uint16_t>(v * 256.0f);
-      uint32_t frame = build_request(WRITE_DATA, 0x1C, raw);
-      send_frame(frame);
-      ESP_LOGI(OT_LOG_TAG, "Boiler mode: sent T_out=%.1f°C (DID 0x1C)", v);
-    } else {
-      ESP_LOGW(OT_LOG_TAG, "Boiler mode active, but no outdoor temperature bound.");
+        float target = 0.0f;
+        if (emergency_.is_active()) {
+            target = emergency_.get_target();
+        } else {
+            target = equitherm_.calculate_target(boiler_.get_limit_temp());
+        }
+
+        uint16_t raw_sp = static_cast<uint16_t>(target * 256.0f);
+        send_request(OT_MSG_WRITE_DATA, OT_MSG_T_SET, raw_sp);
+
+        boiler_.update(this);
+        dhw_.update(this);
+        diagnostics_.update(this);
     }
-  }
 
-  // Limit enforcement (DHW vs CH)
-  float heating_limit = OT_SENSOR(max_boiler_temp) && OT_SENSOR(max_boiler_temp)->has_state()
-                        ? OT_SENSOR(max_boiler_temp)->state
-                        : DEFAULT_MAX_HEATING_TEMP;
-  float dhw_limit = OT_SENSOR(max_dhw_temp) && OT_SENSOR(max_dhw_temp)->has_state()
-                        ? OT_SENSOR(max_dhw_temp)->state
-                        : DEFAULT_MAX_DHW_TEMP;
+    if (!request_queue_.empty() && (now - last_req_ms_ > 100)) {
+        last_req_ms_ = now;
+        uint8_t did  = request_queue_.front();
+        request_queue_.pop();
 
-  const bool dhw_active_now = this->tap_flow();
-  const float active_limit = dhw_active_now ? dhw_limit : heating_limit;
-  if (flow_target > active_limit) flow_target = active_limit;
+        uint32_t response = read_did(did);
+        if (response != 0) {
+            process_response(did, response);
+        }
+    }
+}
 
-  if (g_compensation_mode == CompensationMode::EQUITHERM
-#if ENABLE_EMERGENCY_MODULE
-      || Emergency::is_active()
-#endif
-  ) {
-    const uint16_t raw = static_cast<uint16_t>(flow_target * 256.0f);
-    const uint32_t frame = build_request(WRITE_DATA, 0x11, raw);
+void OpenThermComponent::process_response(uint8_t did, uint32_t response) {
+    uint16_t data = (response >> 8) & 0xFFFF;
+    float value   = static_cast<int16_t>(data) / 256.0f;
+
+    if (boiler_.process_message(did, value)) return;
+    if (dhw_.process_message(did, data, value)) return;
+    if (diagnostics_.process_message(did, data, value)) return;
+
+    ESP_LOGD(TAG, "Unknown ID received: %d", did);
+}
+
+uint32_t OpenThermComponent::read_did(uint8_t did) {
+    const uint32_t req = build_request(OT_MSG_READ_DATA, did, 0);
+    if (!send_frame(req)) return 0;
+
+    uint32_t resp = 0;
+    if (!recv_frame(resp)) {
+        if (debug_) ESP_LOGW(TAG, "Timeout/bad frame for DID 0x%02X", did);
+        return 0;
+    }
+    return resp;
+}
+
+void OpenThermComponent::send_request(uint8_t type, uint8_t id, uint16_t data) {
+    uint32_t frame = build_request(type, id, data);
     send_frame(frame);
-    if (debug_) ESP_LOGI(OT_LOG_TAG, "Flow setpoint sent = %.1f°C", flow_target);
-  }
-
-#if ENABLE_DIAGNOSTICS_MODULE
-  Diagnostics::update(this);
-#endif
-#if ENABLE_DHW_MODULE
-  DHW::update(this);
-#endif
-  Boiler::update(this);
 }
 
-// --- Framing helpers (unchanged) ---
 uint8_t OpenThermComponent::parity32(uint32_t v) {
-  v >>= 1; v ^= v >> 16; v ^= v >> 8; v ^= v >> 4; v &= 0xF;
-  static const uint8_t lut[16] = {0,1,1,0,1,0,0,1,1,0,0,1,0,1,1,0};
-  return lut[v] & 1u;
+    v >>= 1;
+    v ^= v >> 16;
+    v ^= v >> 8;
+    v ^= v >> 4;
+    v &= 0xF;
+    static const uint8_t lut[16] = {0, 1, 1, 0, 1, 0, 0, 1, 1, 0, 0, 1, 0, 1, 1, 0};
+    return lut[v] & 1u;
 }
 
-uint32_t OpenThermComponent::build_request(OTMsgType mt, uint8_t did, uint16_t data) {
-  uint32_t f = 0;
-  f |= (1u << 31);
-  f |= (static_cast<uint32_t>(mt) & 0x7u) << 28;
-  f |= (static_cast<uint32_t>(did) & 0xFFu) << 20;
-  f |= (static_cast<uint32_t>(data) & 0xFFFFu) << 4;
-  f |= parity32(f);
-  return f;
+uint32_t OpenThermComponent::build_request(uint8_t mt, uint8_t did, uint16_t data) {
+    uint32_t f = 0;
+    f |= (1u << 31);
+    f |= (static_cast<uint32_t>(mt) & 0x7u) << 28;
+    f |= (static_cast<uint32_t>(did) & 0xFFu) << 20;
+    f |= (static_cast<uint32_t>(data) & 0xFFFFu) << 4;
+    f |= parity32(f);
+    return f;
+}
+
+void OpenThermComponent::line_tx_level(bool high) {
+    out_pin_->digital_write(high);
+}
+bool OpenThermComponent::line_rx_level() const {
+    return in_pin_->digital_read();
 }
 
 bool OpenThermComponent::wait_us(uint32_t us) {
-  const int64_t start = esp_timer_get_time();
-  while ((esp_timer_get_time() - start) < static_cast<int64_t>(us)) {}
-  return true;
+    const int64_t start = esp_timer_get_time();
+    while ((esp_timer_get_time() - start) < static_cast<int64_t>(us)) {
+    }
+    return true;
 }
 
-void OpenThermComponent::line_tx_level(bool high) { out_pin_->digital_write(high); }
-bool OpenThermComponent::line_rx_level() const { return in_pin_->digital_read(); }
-
 void OpenThermComponent::tx_manchester_bit(bool logical_one) {
-  if (logical_one) { line_tx_level(true);  wait_us(HALF_BIT_US); line_tx_level(false); wait_us(HALF_BIT_US); }
-  else             { line_tx_level(false); wait_us(HALF_BIT_US); line_tx_level(true);  wait_us(HALF_BIT_US); }
+    if (logical_one) {
+        line_tx_level(true);
+        wait_us(HALF_BIT_US);
+        line_tx_level(false);
+        wait_us(HALF_BIT_US);
+    } else {
+        line_tx_level(false);
+        wait_us(HALF_BIT_US);
+        line_tx_level(true);
+        wait_us(HALF_BIT_US);
+    }
 }
 
 bool OpenThermComponent::send_frame(uint32_t frame) {
-  line_tx_level(true); wait_us(3 * BIT_US);
-  for (int i = 31; i >= 0; --i) tx_manchester_bit((frame >> i) & 1u);
-  line_tx_level(true); wait_us(3 * BIT_US);
-  if (debug_) ESP_LOGD(OT_LOG_TAG, "TX frame: 0x%08X", frame);
-  return true;
+    line_tx_level(true);
+    wait_us(3 * BIT_US);
+    for (int i = 31; i >= 0; --i) tx_manchester_bit((frame >> i) & 1u);
+    line_tx_level(true);
+    wait_us(3 * BIT_US);
+    if (debug_) ESP_LOGD(TAG, "TX frame: 0x%08X", frame);
+    return true;
 }
 
 bool OpenThermComponent::recv_frame(uint32_t &resp) {
-  const int64_t overall_start = esp_timer_get_time();
-  resp = 0;
+    const int64_t overall_start = esp_timer_get_time();
+    resp                        = 0;
 
-  while ((esp_timer_get_time() - overall_start) < static_cast<int64_t>(rx_timeout_ms_) * 1000) {
-    bool last = line_rx_level();
-    int64_t edge_start = esp_timer_get_time();
-    bool edge_found = false;
+    while ((esp_timer_get_time() - overall_start) < static_cast<int64_t>(rx_timeout_ms_) * 1000) {
+        bool last       = line_rx_level();
+        bool edge_found = false;
 
-    while ((esp_timer_get_time() - edge_start) < 2 * BIT_US) {  
-      bool now = line_rx_level();
-      if (now != last) {
-        edge_found = true;
-        last = now;
-        break;
-      }
-    }
+        int64_t edge_start = esp_timer_get_time();
 
-    if (!edge_found) {
-      continue;
-    }
-
-    wait_us(HALF_BIT_US);
-
-    uint32_t v = 0;
-    for (int i = 31; i >= 0; --i) {
-      const bool first = line_rx_level();
-      wait_us(HALF_BIT_US);
-      const bool second = line_rx_level();
-
-      if (first && !second) {
-        v = (v << 1) | 1u;
-      } else if (!first && second) {
-        v = (v << 1);
-      } else {
-        if (debug_) {
-          ESP_LOGW("opentherm",
-                   "Bad Manchester pair (%d%d) tijdens RX, bit index %d – frame verworpen",
-                   first, second, i);
+        while ((esp_timer_get_time() - edge_start) < 2 * BIT_US) {
+            bool now = line_rx_level();
+            if (now != last) {
+                edge_found = true;
+                last       = now;
+                break;
+            }
         }
-        v = 0;
-        goto next_try;
-      }
+
+        if (!edge_found) continue;
+
+        wait_us(HALF_BIT_US);
+
+        uint32_t v = 0;
+        for (int i = 31; i >= 0; --i) {
+            const bool first = line_rx_level();
+            wait_us(HALF_BIT_US);
+            const bool second = line_rx_level();
+
+            if (first && !second) {
+                v = (v << 1) | 1u;
+            } else if (!first && second) {
+                v = (v << 1);
+            } else {
+                v = 0;
+                goto next_try;
+            }
+        }
+
+        resp = v;
+        if ((resp & 0x1u) != parity32(resp)) {
+            if (debug_) ESP_LOGW(TAG, "Parity error 0x%08X", resp);
+            resp = 0;
+            goto next_try;
+        }
+
+        if (debug_) ESP_LOGD(TAG, "RX frame OK: 0x%08X", resp);
+        return true;
+
+    next_try:
+        continue;
     }
-
-    resp = v;
-    if ((resp & 0x1u) != parity32(resp)) {
-      if (debug_) {
-        ESP_LOGW("opentherm",
-                 "Parity error op RX frame: 0x%08X (LSB parity-bit komt niet overeen)", resp);
-      }
-      resp = 0;
-      goto next_try;
-    }
-
-    if (debug_) {
-      ESP_LOGD("opentherm", "RX frame OK: 0x%08X", resp);
-    }
-    return true; 
-
-  next_try:
-    continue;
-  }
-
-  return false;
+    return false;
 }
 
-
-uint32_t OpenThermComponent::read_did(uint8_t did) {
-  const uint32_t req = build_request(READ_DATA, did, 0);
-  if (!send_frame(req)) return 0;
-  uint32_t resp = 0;
-  if (!recv_frame(resp)) {
-    if (debug_) ESP_LOGW(OT_LOG_TAG, "Timeout/bad frame for DID 0x%02X", did);
-    return 0;
-  }
-  if (((resp >> 31) & 1u) != 1u) return 0;
-  return resp;
-}
-
-float OpenThermComponent::parse_f88(uint16_t raw) {
-  return static_cast<int16_t>(raw) / 256.0f;
-}
-
-} // namespace opentherm
+}  // namespace opentherm

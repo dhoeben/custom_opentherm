@@ -1,53 +1,58 @@
 #include "boiler.h"
-#include "sensors.h"
-#include "opentherm.h"
-#include "esphome/core/log.h"
 
-using namespace esphome;
+#include "esphome/core/log.h"
+#include "opentherm.h"
 
 namespace opentherm {
-namespace Boiler {
 
 static const char *const TAG = "ot_boiler";
 
-// keep convenience handle (assigned in OpenThermComponent::setup)
-esphome::number::Number *max_heating_temp = nullptr;
-
-void update(OpenThermComponent *ot) {
-  if (!ot) return;
-
-  // Flow temp (0x18)
-  if (uint32_t raw18 = ot->read_did(0x18)) {
-    uint16_t data = (raw18 >> 8) & 0xFFFF;
-    float value = ot->parse_f88(data);
-    PUBLISH_IF(OT_SENSOR(boiler_temp), value);
-    ESP_LOGD(TAG, "Water Temp: %.1f°C", value);
-  }
-
-  // Return temp (0x19)
-  if (uint32_t raw19 = ot->read_did(0x19)) {
-    uint16_t data = (raw19 >> 8) & 0xFFFF;
-    float value = ot->parse_f88(data);
-    PUBLISH_IF(OT_SENSOR(return_temp), value);
-    ESP_LOGD(TAG, "Return Temp: %.1f°C", value);
-  }
-
-  // Modulation (0x1D)
-  if (uint32_t raw1D = ot->read_did(0x1D)) {
-    uint16_t data = (raw1D >> 8) & 0xFFFF;
-    float value = ot->parse_f88(data);
-    PUBLISH_IF(OT_SENSOR(modulation), value);
-    ESP_LOGD(TAG, "Modulation: %.0f%%", value);
-  }
-
-  // Setpoint echo (0x11)
-  if (uint32_t raw11 = ot->read_did(0x11)) {
-    uint16_t data = (raw11 >> 8) & 0xFFFF;
-    float value = ot->parse_f88(data);
-    PUBLISH_IF(OT_SENSOR(setpoint), value);
-    ESP_LOGD(TAG, "Setpoint Echo: %.1f°C", value);
-  }
+void BoilerModule::setup() {
+    if (limit_number_) {
+        if (!limit_number_->has_state()) {
+            limit_number_->publish_state(60.0f);
+        }
+    }
 }
 
-} // namespace Boiler
-} // namespace opentherm
+void BoilerModule::update(OpenThermComponent *ot) {
+    ot->enqueue_request(OT_MSG_CH_WATER_TEMP);
+    ot->enqueue_request(OT_MSG_RETURN_WATER_TEMP);
+
+    ot->enqueue_request(0x18);
+    ot->enqueue_request(0x19);
+
+    ot->enqueue_request(OT_MSG_REL_MOD_LEVEL);
+    ot->enqueue_request(OT_MSG_SOLAR_STORAGE);
+}
+
+bool BoilerModule::process_message(uint8_t id, float value) {
+    switch (id) {
+        case 0x18:
+            if (temp_sensor_) temp_sensor_->publish_state(value);
+            return true;
+        case 0x19:
+            if (return_sensor_) return_sensor_->publish_state(value);
+            return true;
+        case OT_MSG_REL_MOD_LEVEL:
+            if (modulation_sensor_) modulation_sensor_->publish_state(value);
+
+            if (setpoint_sensor_) setpoint_sensor_->publish_state(value);
+            return true;
+        case OT_MSG_SOLAR_STORAGE:
+
+            if (modulation_sensor_) modulation_sensor_->publish_state(value);
+            return true;
+        default:
+            return false;
+    }
+}
+
+float BoilerModule::get_limit_temp() const {
+    if (limit_number_ && limit_number_->has_state()) {
+        return limit_number_->state;
+    }
+    return 60.0f;
+}
+
+}  // namespace opentherm

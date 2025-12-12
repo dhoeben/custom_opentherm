@@ -1,28 +1,57 @@
 #pragma once
-#include "esphome/components/number/number.h"
+#include "definitions.h"
 #include "esphome/components/climate/climate.h"
+#include "esphome/components/number/number.h"
+#include "esphome/components/sensor/sensor.h"
 
 namespace opentherm {
+
 class OpenThermComponent;
 
-namespace DHW {
+enum class DHWMode { OFF, ECO, HEAT };
 
-enum class Mode { OFF, ECO, HEAT };
+class DHWModule {
+   public:
+    void setup();
+    void update(OpenThermComponent *ot);
+    bool process_message(uint8_t id, uint16_t data, float value);
 
-// Linked from component setup
-extern esphome::number::Number *max_water_temp;
-extern esphome::climate::Climate *dhw_climate;
+    void set_temp_sensor(esphome::sensor::Sensor *s) {
+        temp_sensor_ = s;
+    }
+    void set_setpoint_sensor(esphome::sensor::Sensor *s) {
+        setpoint_sensor_ = s;
+    }
+    void set_limit_number(esphome::number::Number *n) {
+        limit_number_ = n;
+    }
+    void set_climate(esphome::climate::Climate *c) {
+        climate_ = c;
+    }
 
-// Flags / state
-extern bool comfort_mode_enabled;
+    void set_forced(bool forced) {
+        forced_ = forced;
+    }
+    void set_mode(DHWMode mode) {
+        mode_ = mode;
+    }
 
-void update(OpenThermComponent *ot);
-void set_enabled(OpenThermComponent *ot, bool enabled);
-void set_target_temp(OpenThermComponent *ot, float temp);
-void set_mode(OpenThermComponent *ot, Mode mode);
-void set_comfort_mode(OpenThermComponent *ot, bool enabled);
-void update_comfort_mode(OpenThermComponent *ot);
-void set_forced(bool on);
+    float get_limit_temp() const;
+    bool  is_active() const {
+        return comfort_mode_enabled_;
+    }
 
-} // namespace DHW
-} // namespace opentherm
+   private:
+    esphome::sensor::Sensor   *temp_sensor_{nullptr};
+    esphome::sensor::Sensor   *setpoint_sensor_{nullptr};
+    esphome::number::Number   *limit_number_{nullptr};
+    esphome::climate::Climate *climate_{nullptr};
+
+    bool    forced_{false};
+    DHWMode mode_{DHWMode::HEAT};
+    bool    comfort_mode_enabled_{true};
+
+    void send_comfort_setting(OpenThermComponent *ot, bool enable);
+};
+
+}  // namespace opentherm

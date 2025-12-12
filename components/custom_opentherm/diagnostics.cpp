@@ -1,94 +1,91 @@
 #include "diagnostics.h"
-#include "opentherm.h"
-#include "sensors.h"
-#include "esphome/core/log.h"
 
-using namespace esphome;
+#include <vector>
+
+#include "esphome/core/log.h"
+#include "opentherm.h"
 
 namespace opentherm {
-namespace Diagnostics {
 
-static const char *const TAG = "ot_diag";
-
-static bool last_comms_ok = false;
-static uint32_t last_rx_time = 0;
-
-static std::string decode_fault_flags(uint16_t data) {
-  std::vector<std::string> faults;
-
-  if (data & (1 << 0)) faults.push_back("Service Required");
-  if (data & (1 << 1)) faults.push_back("Lockout Active");
-  if (data & (1 << 2)) faults.push_back("Low Water Pressure");
-  if (data & (1 << 3)) faults.push_back("Flame Loss");
-  if (data & (1 << 4)) faults.push_back("Sensor Failure");
-  if (data & (1 << 5)) faults.push_back("Overheat Protection");
-  if (data & (1 << 6)) faults.push_back("Gas Fault");
-  if (data & (1 << 7)) faults.push_back("Air Pressure Fault");
-  if (data & (1 << 8)) faults.push_back("Fan Fault");
-  if (data & (1 << 9)) faults.push_back("Communication Error");
-  if (data & (1 << 10)) faults.push_back("Return Temp Sensor Fault");
-  if (data & (1 << 11)) faults.push_back("Flow Temp Sensor Fault");
-  if (data & (1 << 12)) faults.push_back("Ignition Failure");
-  if (data & (1 << 13)) faults.push_back("Flue Blocked");
-  if (data & (1 << 14)) faults.push_back("Circulation Fault");
-  if (data & (1 << 15)) faults.push_back("Unknown Fault");
-
-  if (faults.empty()) return "No faults";
-
-  std::string result;
-  for (size_t i = 0; i < faults.size(); ++i) {
-    result += faults[i];
-    if (i != faults.size() - 1) result += ", ";
-  }
-  return result;
-}
-
-void update(OpenThermComponent *ot) {
-  if (!ot) return;
-
-  const uint32_t now = millis();
-  bool comms_ok = false;
-
-  const uint32_t raw00 = ot->read_did(0x00);
-  if (raw00 != 0) {
-    comms_ok = true;
-    last_rx_time = now;
-
-    const uint16_t data = (raw00 >> 8) & 0xFFFF;
-
-    const bool is_fault  = data & (1 << 0);
-    const bool ch        = data & (1 << 1);
-    const bool dhw       = data & (1 << 2);
-    const bool flame     = data & (1 << 3);
-
-    if (Sensors::fault)      Sensors::fault->publish_state(is_fault);
-    if (Sensors::ch_active)  Sensors::ch_active->publish_state(ch);
-    if (Sensors::dhw_active) Sensors::dhw_active->publish_state(dhw);
-    if (Sensors::flame)      Sensors::flame->publish_state(flame);
-  }
-
-  const uint32_t raw01 = ot->read_did(0x01);
-  if (raw01 != 0 && Sensors::fault_text != nullptr) {
-    const uint16_t data = (raw01 >> 8) & 0xFFFF;
-    Sensors::fault_text->publish_state(decode_fault_flags(data));
-  }
-
-  const uint32_t raw3E = ot->read_did(0x3E);
-  if (raw3E != 0 && Sensors::dhw_flow_rate != nullptr) {
-    const uint16_t data = (raw3E >> 8) & 0xFFFF;
-    Sensors::dhw_flow_rate->publish_state(ot->parse_f88(data));
-  }
-
-  if (Sensors::comms_ok) {
-    const bool timed_out = (now - last_rx_time) > 60000;
-    const bool state = comms_ok || !timed_out;
-
-    if (state != last_comms_ok) {
-      Sensors::comms_ok->publish_state(state);
-      last_comms_ok = state;
+void DiagnosticsModule::update(OpenThermComponent *ot) {
+    uint32_t now = esphome::millis();
+    if (comms_ok_) {
+        bool ok = (now - last_rx_time_) < 60000;
+        if (ok != last_comms_state_) {
+            last_comms_state_ = ok;
+            comms_ok_->publish_state(ok);
+        }
     }
-  }
+
+    ot->enqueue_request(OT_MSG_STATUS);
+    ot->enqueue_request(OT_MSG_FAULT_FLAGS);
+
+    if (flow_rate_) ot->enqueue_request(OT_MSG_DHW_FLOW_RATE);
 }
 
-}  // namespace Diagnostics
+bool DiagnosticsModule::process_message(uint8_t id, uint16_t data, float value) {
+    last_rx_time_ = esphome::millis();
+
+    switch (id) {
+        case OT_MSG_STATUS: {
+            bool is_fault = data & (1 << 0);
+            bool ch       = data & (1 << 1);
+            bool dhw      = data & (1 << 2);
+            bool flame    = data & (1 << 3);
+
+            dhw_active_state_ = dhw;
+
+            if (fault_) fault_->publish_state(is_fault);
+            if (ch_active_) ch_active_->publish_state(ch);
+            if (dhw_active_) dhw_active_->publish_state(dhw);
+            if (flame_) flame_->publish_state(flame);
+            return true;
+        }
+        case OT_MSG_FAULT_FLAGS:
+            if (fault_text_) fault_text_->publish_state(decode_fault_flags(data));
+            return true;
+        case OT_MSG_DHW_FLOW_RATE:
+            if (flow_rate_) flow_rate_->publish_state(value);
+            return true;
+        default:
+            return false;
+    }
+}
+
+std::string DiagnosticsModule::decode_fault_flags(uint16_t data) {
+    static const struct {
+        uint16_t    mask;
+        const char *message;
+    } fault_definitions[] = {{1 << 0, "Service Required"},
+                             {1 << 1, "Lockout Active"},
+                             {1 << 2, "Low Water Pressure"},
+                             {1 << 3, "Flame Loss"},
+                             {1 << 4, "Sensor Failure"},
+                             {1 << 5, "Overheat Protection"},
+                             {1 << 6, "Gas Fault"},
+                             {1 << 7, "Air Pressure Fault"},
+                             {1 << 8, "Fan Fault"},
+                             {1 << 9, "Communication Error"},
+                             {1 << 10, "Return Temp Sensor Fault"},
+                             {1 << 11, "Flow Temp Sensor Fault"},
+                             {1 << 12, "Ignition Failure"},
+                             {1 << 13, "Flue Blocked"},
+                             {1 << 14, "Circulation Fault"},
+                             {1 << 15, "Unknown Fault"}};
+
+    std::vector<std::string> faults;
+
+    for (const auto &def : fault_definitions) {
+        if (data & def.mask) {
+            faults.push_back(def.message);
+        }
+    }
+
+    if (faults.empty()) return "No faults";
+
+    std::string result = faults[0];
+    for (size_t i = 1; i < faults.size(); ++i) result += ", " + faults[i];
+    return result;
+}
+
 }  // namespace opentherm
