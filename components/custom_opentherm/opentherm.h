@@ -23,9 +23,27 @@ class OpenThermComponent : public esphome::Component {
   void setup() override;
   void loop() override;
 
+  // --- PUBLIC MODULES (zodat je YAML erbij kan) ---
+  BoilerModule boiler_;
+  DHWModule dhw_;
+  DiagnosticsModule diagnostics_;
+  EquithermModule equitherm_;
+  EmergencyModule emergency_;
+
+  // --- Helpers voor YAML lambda's ---
+  
+  // Vroegere 'tap_flow' functie
+  bool tap_flow() const { 
+      // Haal de status op uit diagnostics (ervan uitgaande dat DHW active = tap flow)
+      // Als je hier een specifieke flow sensor voor had, moet die logica hier terug.
+      return diagnostics_.is_dhw_active(); 
+  }
+
+  // Wrapper om handmatig berichten te sturen (vervangt send_frame in YAML)
+  void send_request(uint8_t type, uint8_t id, uint16_t data); 
+  
   // Queue helper (gebruikt door modules)
   void enqueue_request(uint8_t did) { request_queue_.push(did); }
-  void send_request(uint8_t type, uint8_t id, uint16_t data); // Direct zenden
 
   // --- Setters (aangeroepen vanuit codegen/__init__.py) ---
   
@@ -38,7 +56,7 @@ class OpenThermComponent : public esphome::Component {
 
   // DHW Sensors
   void set_dhw_temp_sensor(esphome::sensor::Sensor *s)    { dhw_.set_temp_sensor(s); }
-  void set_dhw_setpoint_sensor(esphome::sensor::Sensor *s){ dhw_.set_setpoint_sensor(s); } // Let op: deze miste ik eerder misschien
+  void set_dhw_setpoint_sensor(esphome::sensor::Sensor *s){ dhw_.set_setpoint_sensor(s); }
   void set_dhw_limit_number(esphome::number::Number *n)   { dhw_.set_limit_number(n); }
   
   // Diagnostics Sensors
@@ -53,7 +71,7 @@ class OpenThermComponent : public esphome::Component {
   // Equitherm & Weather
   void set_ha_weather_sensor(esphome::sensor::Sensor *s) { equitherm_.set_outdoor_sensor(s); }
   void set_ha_indoor_sensor(esphome::sensor::Sensor *s)  { equitherm_.set_indoor_sensor(s); }
-  void set_adaptive_indoor_sensor(esphome::sensor::Sensor *s) { /* TODO: evt gebruiken in equitherm */ }
+  void set_adaptive_indoor_sensor(esphome::sensor::Sensor *s) { /* TODO: evt gebruiken */ }
   void set_climate_entity(esphome::climate::Climate *c)  { equitherm_.set_climate(c); }
   void set_dhw_climate_entity(esphome::climate::Climate *c) { dhw_.set_climate(c); }
   
@@ -69,20 +87,13 @@ class OpenThermComponent : public esphome::Component {
 
   // Config setters
   void set_pins(esphome::InternalGPIOPin *in, esphome::InternalGPIOPin *out) { in_pin_ = in; out_pin_ = out; }
-  void set_poll_interval(uint32_t ms) { poll_interval_ms_ = ms; } // Hoewel we nu hardcoded 10s gebruiken in loop
+  void set_poll_interval(uint32_t ms) { poll_interval_ms_ = ms; }
   void set_rx_timeout(uint32_t ms)    { rx_timeout_ms_ = ms; }
   void set_debug(bool dbg)            { debug_ = dbg; }
 
   static OpenThermComponent* get_singleton();
 
  private:
-  // Sub-modules (Classes)
-  BoilerModule boiler_;
-  DHWModule dhw_;
-  DiagnosticsModule diagnostics_;
-  EquithermModule equitherm_;
-  EmergencyModule emergency_;
-
   // IO & State
   esphome::InternalGPIOPin *in_pin_{nullptr};
   esphome::InternalGPIOPin *out_pin_{nullptr};
@@ -91,19 +102,18 @@ class OpenThermComponent : public esphome::Component {
   uint32_t last_poll_ms_{0};
   uint32_t last_req_ms_{0};
   
-  // Config variables (die ontbraken!)
+  // Config variables
   uint32_t poll_interval_ms_{10000};
   uint32_t rx_timeout_ms_{1000};
   bool debug_{false};
 
-  // Helpers
+  // Low-level Helpers
   uint32_t read_did(uint8_t did);
   bool send_frame(uint32_t frame);
   bool recv_frame(uint32_t &resp);
   void process_response(uint8_t did, uint32_t response);
   uint32_t build_request(uint8_t mt, uint8_t did, uint16_t data);
   
-  // Low-level Bit Banging (die ontbraken!)
   static uint8_t parity32(uint32_t v);
   void line_tx_level(bool high);
   bool line_rx_level() const;
@@ -111,7 +121,7 @@ class OpenThermComponent : public esphome::Component {
   void tx_manchester_bit(bool logical_one);
 };
 
-// Global helpers (nodig voor __init__.py calls)
+// Global helpers
 extern CompensationMode g_compensation_mode;
 void set_compensation_mode(CompensationMode m);
 void set_compensation_mode_from_string(const std::string &s);
