@@ -304,6 +304,7 @@ void OpenThermComponent::process_response(uint8_t did, uint32_t response) {
     case 0x18: if (boiler_temp_) boiler_temp_->publish_state(value); break;
     case 0x19: if (return_temp_) return_temp_->publish_state(value); break;
     case 0x11: if (modulation_) modulation_->publish_state(value); break;
+    case 0x1D: if (modulation_) modulation_->publish_state(value); break;
     
     // Diagnostics
     case 0x00: Diagnostics::process_status(data); break;
