@@ -1,112 +1,82 @@
 #include "dhw.h"
-#include "sensors.h"
 #include "opentherm.h"
 #include "esphome/core/log.h"
 #include <cmath>
-#include <limits>
 
 namespace opentherm {
-namespace DHW {
 
-static const char *const TAG = "dhw";
+static const char *const TAG = "ot_dhw";
 
-esphome::number::Number *max_water_temp = nullptr;
-esphome::climate::Climate *dhw_climate = nullptr;
-
-static Mode current_mode = Mode::HEAT;
-bool comfort_mode_enabled = true;
-static bool forced = false;
-
-void set_forced(bool on) {
-  forced = on;
-  ESP_LOGI(TAG, "Forced DHW mode %s", on ? "ENABLED" : "DISABLED");
+void DHWModule::setup() {
+    // Defaults init
+    if (limit_number_ && !limit_number_->has_state()) limit_number_->publish_state(60.0f);
 }
 
-void process_comfort_mode_response(uint16_t data) {
-    const uint8_t mode = data >> 8;
-    comfort_mode_enabled = (mode == 2);
-    ESP_LOGD(TAG, "Comfort mode status updated: %s", comfort_mode_enabled ? "Enabled" : "Disabled");
+void DHWModule::update(OpenThermComponent *ot) {
+    if (forced_) {
+        // Forceer setpoint 60C
+        uint16_t raw = static_cast<uint16_t>(60.0f * 256.0f);
+        ot->send_request(OT_MSG_WRITE_DATA, OT_MSG_DHW_SETPOINT, raw); // 0x38
+        return;
+    }
+
+    // 1. Vraag Comfort Status op (Queue)
+    ot->enqueue_request(OT_MSG_DHW_COMFORT); // 0x33
+
+    // 2. Bereken Setpoint
+    float target = 60.0f;
+    if (mode_ == DHWMode::OFF) target = 0.0f;
+    else if (climate_ && !std::isnan(climate_->target_temperature)) target = climate_->target_temperature;
+    else if (limit_number_ && limit_number_->has_state()) target = limit_number_->state;
+
+    // Clamp
+    float limit = get_limit_temp();
+    if (target > limit) target = limit;
+    
+    // 3. Stuur Setpoint (Direct)
+    uint16_t raw_sp = static_cast<uint16_t>(target * 256.0f);
+    ot->send_request(OT_MSG_WRITE_DATA, OT_MSG_DHW_SETPOINT, raw_sp);
+
+    // 4. Stuur Comfort setting (Write)
+    if (mode_ == DHWMode::HEAT) send_comfort_setting(ot, comfort_mode_enabled_);
+    else if (mode_ == DHWMode::OFF) send_comfort_setting(ot, false);
+
+    // Update Climate state in HA
+    if (climate_) {
+        if (temp_sensor_ && temp_sensor_->has_state()) 
+            climate_->current_temperature = temp_sensor_->state;
+        
+        climate_->target_temperature = target;
+        climate_->mode = (mode_ == DHWMode::OFF) ? esphome::climate::CLIMATE_MODE_OFF : esphome::climate::CLIMATE_MODE_HEAT;
+        climate_->preset = comfort_mode_enabled_ ? esphome::climate::CLIMATE_PRESET_COMFORT : esphome::climate::CLIMATE_PRESET_ECO;
+        climate_->publish_state();
+    }
 }
 
-void update(OpenThermComponent *ot) {
-#if !ENABLE_DHW_MODULE
-  (void)ot;
-  return;
-#endif
-  if (!ot) return;
-
-  if (forced) {
-    const float temp = 60.0f;
-    const uint16_t raw = static_cast<uint16_t>(temp * 256.0f);
-    const uint32_t frame = OpenThermComponent::build_request(WRITE_DATA, 0x38, raw);
-    ot->send_frame(frame);
-    return;
-  }
-
-  ot->enqueue_request(0x33); 
-
-  // Compute setpoint
-  float setpoint = 60.0f; // default
-  if (current_mode == Mode::OFF) setpoint = 0.0f;
-  else if (dhw_climate && !std::isnan(dhw_climate->target_temperature)) setpoint = dhw_climate->target_temperature;
-  else if (max_water_temp && max_water_temp->has_state()) setpoint = max_water_temp->state;
-
-  // Clamp
-  float limit = (max_water_temp && max_water_temp->has_state()) ? max_water_temp->state : DEFAULT_MAX_DHW_TEMP;
-  if (setpoint < MIN_DHW_TEMP && current_mode != Mode::OFF) setpoint = MIN_DHW_TEMP;
-  if (setpoint > limit) setpoint = limit;
-
-  const uint16_t raw = static_cast<uint16_t>(setpoint * 256.0f);
-  const uint32_t frame = OpenThermComponent::build_request(WRITE_DATA, 0x38, raw);
-  ot->send_frame(frame);
-
-  if (current_mode == Mode::HEAT) set_comfort_mode(ot, comfort_mode_enabled);
-  else if (current_mode == Mode::OFF) set_comfort_mode(ot, false);
-
-  // Sync to HA climate
-  if (dhw_climate) {
-    dhw_climate->current_temperature =
-      (OT_SENSOR(dhw_temp) && OT_SENSOR(dhw_temp)->has_state())
-        ? OT_SENSOR(dhw_temp)->state
-        : std::numeric_limits<float>::quiet_NaN();
-    dhw_climate->target_temperature = setpoint;
-    dhw_climate->preset = comfort_mode_enabled
-      ? esphome::climate::CLIMATE_PRESET_COMFORT
-      : esphome::climate::CLIMATE_PRESET_ECO;
-    dhw_climate->publish_state();
-  }
+bool DHWModule::process_message(uint8_t id, uint16_t data, float value) {
+    switch (id) {
+        case OT_MSG_DHW_COMFORT: { // 0x33
+            uint8_t mode_byte = data >> 8;
+            comfort_mode_enabled_ = (mode_byte == 2);
+            ESP_LOGD(TAG, "Comfort status: %s", comfort_mode_enabled_ ? "ON" : "OFF");
+            return true;
+        }
+        case OT_MSG_DHW_TEMP: // 0x1A of 26 (Jij gebruikte geen 0x1A in je oude code, maar wel DHW sensor logic)
+             if (temp_sensor_) temp_sensor_->publish_state(value);
+             return true;
+        default:
+            return false;
+    }
 }
 
-void set_mode(OpenThermComponent *ot, Mode mode) {
-  current_mode = mode;
-  update(ot);
+void DHWModule::send_comfort_setting(OpenThermComponent *ot, bool enable) {
+    uint8_t mode_val = enable ? 2 : 1;
+    uint16_t data = static_cast<uint16_t>(mode_val) << 8;
+    ot->send_request(OT_MSG_WRITE_DATA, OT_MSG_DHW_COMFORT, data);
 }
 
-void set_enabled(OpenThermComponent *ot, bool enabled) {
-  if (!ot) return;
-  if (!enabled) {
-    current_mode = Mode::OFF;
-  } else {
-    if (current_mode == Mode::OFF) current_mode = Mode::HEAT;
-  }
-  update(ot);
+float DHWModule::get_limit_temp() const {
+    return (limit_number_ && limit_number_->has_state()) ? limit_number_->state : 60.0f;
 }
 
-void set_target_temp(OpenThermComponent *ot, float temp) {
-  if (!ot) return;
-  const uint16_t raw = static_cast<uint16_t>(temp * 256.0f);
-  const uint32_t frame = OpenThermComponent::build_request(WRITE_DATA, 0x38, raw);
-  ot->send_frame(frame);
-}
-
-void set_comfort_mode(OpenThermComponent *ot, bool enabled) {
-  if (!ot) return;
-  
-  const uint8_t mode = enabled ? 2 : 1; 
-  const uint16_t data = static_cast<uint16_t>(mode) << 8;
-  const uint32_t frame = OpenThermComponent::build_request(WRITE_DATA, 0x33, data);
-  ot->send_frame(frame);
-}
-
-} // namespace DHW
 } // namespace opentherm
