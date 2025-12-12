@@ -322,5 +322,4 @@ void OpenThermComponent::process_response(uint8_t did, uint32_t response) {
       ESP_LOGD(OT_LOG_TAG, "Processed 0x%02X", did);
   }
 }
-}
 } // namespace opentherm
