@@ -1,6 +1,8 @@
 #pragma once
 #include <cstdint>
 
+namespace opentherm {
+
 // Message Types (Read/Write)
 enum OpenThermMessageType : uint8_t {
     OT_MSG_READ_DATA   = 0,    // 0x00
@@ -16,7 +18,7 @@ enum OpenThermMessageType : uint8_t {
 // Message Data IDs
 enum OpenThermMessageID : uint8_t {
     OT_MSG_STATUS          = 0,    // 0x00 - Master/Slave Status flags
-    OT_MSG_T_SET           = 1,    // 0x01 - Control Setpoint (Fault flags in read-ack)
+    OT_MSG_T_SET           = 1,    // 0x01 - Control Setpoint
     OT_MSG_FAULT_FLAGS     = 1,    // 0x01 - Application Specific Fault Flags
     OT_MSG_OEM_CODE        = 2,    // 0x02 - OEM Code
     
@@ -27,7 +29,7 @@ enum OpenThermMessageID : uint8_t {
     OT_MSG_T_OUTSIDE       = 27,   // 0x1B - Outside Temperature
     OT_MSG_RETURN_WATER_TEMP = 28, // 0x1C - Return Water Temperature
     
-    // Specifieke / Afwijkende mappings uit jouw project
+    // Specifieke / Afwijkende mappings
     OT_MSG_BOILER_TEMP_LEGACY = 24, // 0x18
     OT_MSG_RETURN_TEMP_LEGACY = 25, // 0x19
     
@@ -41,3 +43,5 @@ enum OpenThermMessageID : uint8_t {
     // OEM / Diagnostics
     OT_MSG_OEM_DIAGNOSTIC  = 115   // 0x73 - OEM Diagnostic code
 };
+
+} // namespace opentherm
