@@ -5,12 +5,17 @@ BasedOnStyle:    Google
 # --- TAB INSTELLINGEN ---
 IndentWidth:     4
 
-# --- UITLIJNING (Jouw nieuwe wens) ---
-# Zorgt dat de = tekens onder elkaar komen
+# --- SPATIES & UITLIJNING ---
+SpacesInContainerLiterals: true
+SpaceBeforeAssignmentOperators: true
+
+# Uitlijnen van = (voor je enums) -> AAN
 AlignConsecutiveAssignments: true
-# Zorgt dat declaraties netjes onder elkaar staan
-AlignConsecutiveDeclarations: true
-# Zorgt dat de // commentaren rechts netjes uitgelijnd zijn
+
+# Uitlijnen van declaraties (jouw variabalen) -> UIT
+AlignConsecutiveDeclarations: false
+
+# Uitlijnen van commentaar -> AAN
 AlignTrailingComments: true
 
 # --- FORMATTERING ---
@@ -20,6 +25,6 @@ BreakBeforeBraces: Attach
 MaxEmptyLinesToKeep: 1
 AllowShortFunctionsOnASingleLine: Empty
 
-# --- PARAMETERS ---
+# --- PARAMETERS ONDER ELKAAR ---
 BinPackParameters: false
 BinPackArguments: false

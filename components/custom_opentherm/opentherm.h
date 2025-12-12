@@ -114,7 +114,7 @@ class OpenThermComponent : public esphome::Component {
     }
 
     void set_pins(esphome::InternalGPIOPin *in, esphome::InternalGPIOPin *out) {
-        in_pin_ = in;
+        in_pin_  = in;
         out_pin_ = out;
     }
     void set_poll_interval(uint32_t ms) {

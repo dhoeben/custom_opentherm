@@ -26,7 +26,7 @@ class EmergencyModule {
     }
 
    private:
-    bool  active_{false};
+    bool active_{false};
     float manual_target_{60.0f};
 
     esphome::switch_::Switch *emergency_switch_{nullptr};
