@@ -1,0 +1,25 @@
+---
+Language:        Cpp
+BasedOnStyle:    Google
+
+# --- TAB INSTELLINGEN ---
+IndentWidth:     4
+
+# --- UITLIJNING (Jouw nieuwe wens) ---
+# Zorgt dat de = tekens onder elkaar komen
+AlignConsecutiveAssignments: true
+# Zorgt dat declaraties netjes onder elkaar staan
+AlignConsecutiveDeclarations: true
+# Zorgt dat de // commentaren rechts netjes uitgelijnd zijn
+AlignTrailingComments: true
+
+# --- FORMATTERING ---
+ColumnLimit:     120
+SortIncludes:    true
+BreakBeforeBraces: Attach
+MaxEmptyLinesToKeep: 1
+AllowShortFunctionsOnASingleLine: Empty
+
+# --- PARAMETERS ---
+BinPackParameters: false
+BinPackArguments: false
