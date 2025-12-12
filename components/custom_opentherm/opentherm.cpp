@@ -5,11 +5,38 @@ namespace opentherm {
 
 static const char *const TAG = "opentherm";
 
-// Bit timing
+// --- GLOBAL STATE & HELPERS (Deze misten!) ---
+static OpenThermComponent *g_singleton = nullptr;
+
+CompensationMode g_compensation_mode = CompensationMode::EQUITHERM;
+
+void set_compensation_mode(CompensationMode m) { 
+    g_compensation_mode = m; 
+}
+
+void set_compensation_mode_from_string(const std::string &s) {
+  if (s == "Boiler" || s == "boiler") {
+    g_compensation_mode = CompensationMode::BOILER;
+    ESP_LOGI(TAG, "Compensation mode: BOILER (internal curve).");
+  } else {
+    g_compensation_mode = CompensationMode::EQUITHERM;
+    ESP_LOGI(TAG, "Compensation mode: EQUITHERM (external setpoint).");
+  }
+}
+
+OpenThermComponent *OpenThermComponent::get_singleton() { 
+    return g_singleton; 
+}
+
+// --- BIT TIMING CONSTANTS ---
 static constexpr uint32_t HALF_BIT_US = 500;
 static constexpr uint32_t BIT_US      = 1000;
 
-OpenThermComponent::OpenThermComponent() {}
+// --- COMPONENT IMPLEMENTATION ---
+
+OpenThermComponent::OpenThermComponent() {
+    g_singleton = this; // Belangrijk: hier registreren we de singleton!
+}
 
 void OpenThermComponent::setup() {
     if (in_pin_) in_pin_->setup();
@@ -29,7 +56,7 @@ void OpenThermComponent::loop() {
     uint32_t now = esphome::millis();
 
     // 1. Scheduler (Elke 10s)
-    if (now - last_poll_ms_ > 10000) {
+    if (now - last_poll_ms_ > poll_interval_ms_) { // Gebruik de ingestelde variabele
         last_poll_ms_ = now;
 
         // Bepaal flow target
@@ -76,10 +103,10 @@ void OpenThermComponent::process_response(uint8_t did, uint32_t response) {
     ESP_LOGD(TAG, "Unknown ID received: %d", did);
 }
 
-// --- Low Level Implementation ---
+// --- LOW LEVEL IMPLEMENTATION ---
 
 uint32_t OpenThermComponent::read_did(uint8_t did) {
-    const uint32_t req = build_request(0, did, 0); // 0 = READ
+    const uint32_t req = build_request(OT_MSG_READ_DATA, did, 0); 
     if (!send_frame(req)) return 0;
     
     uint32_t resp = 0;
@@ -87,8 +114,6 @@ uint32_t OpenThermComponent::read_did(uint8_t did) {
         if (debug_) ESP_LOGW(TAG, "Timeout/bad frame for DID 0x%02X", did);
         return 0;
     }
-    // Check READ-ACK (bit 31 moet 1 zijn bij response op read) en ID match
-    // Strikt genomen zou je ook moeten checken of het teruggekomen ID klopt
     return resp;
 }
 
