@@ -1,7 +1,7 @@
 #pragma once
 #include <queue>
 #include "esphome.h"
-#include "opentherm_defs.h"
+#include "definitions.h"
 #include "driver/gpio.h"
 #include "esp_timer.h"
 
