@@ -31,6 +31,9 @@ bool DiagnosticsModule::process_message(uint8_t id, uint16_t data, float value) 
             bool ch       = data & (1 << 1);
             bool dhw      = data & (1 << 2);
             bool flame    = data & (1 << 3);
+            
+            // DIT IS BELANGRIJK: We slaan de status intern op zodat tap_flow() werkt
+            dhw_active_state_ = dhw;
 
             if (fault_) fault_->publish_state(is_fault);
             if (ch_active_) ch_active_->publish_state(ch);

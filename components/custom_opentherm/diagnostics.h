@@ -2,7 +2,7 @@
 #include "esphome/components/sensor/sensor.h"
 #include "esphome/components/text_sensor/text_sensor.h"
 #include "esphome/components/binary_sensor/binary_sensor.h"
-#include "definitions.h"
+#include "opentherm_defs.h"
 #include <string>
 
 namespace opentherm {
@@ -13,6 +13,9 @@ class DiagnosticsModule {
  public:
   void update(OpenThermComponent *ot);
   bool process_message(uint8_t id, uint16_t data, float value);
+
+  // DEZE FUNCTIE ONTBRAK BIJ JOU:
+  bool is_dhw_active() const { return dhw_active_state_; }
 
   // Setters
   void set_fault_sensor(esphome::binary_sensor::BinarySensor *s) { fault_ = s; }
@@ -36,6 +39,7 @@ class DiagnosticsModule {
 
   uint32_t last_rx_time_{0};
   bool last_comms_state_{false};
+  bool dhw_active_state_{false}; // Interne state variabele
 
   std::string decode_fault_flags(uint16_t data);
 };
