@@ -5,6 +5,7 @@ This is a `custom_component` for ESPHome. It is mainly used in my OpenTherm Gate
 
 ### Other projects
 [OpenTherm Gatway](https://github.com/dhoeben/esp32-opentherm)
+
 [Themostat](https://github.com/dhoeben/esp32-thermostat)
 
 Feel free to also use my thermostat I created, which uses a E-ink display and is also fully customizable. Also has his own PCB you can just order! https://github.com/dhoeben/esp32-thermostat. 
