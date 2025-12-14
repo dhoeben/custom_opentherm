@@ -1,10 +1,10 @@
 # Custom OpenTherm Component 
 [![GitHub release](https://img.shields.io/github/v/release/dhoeben/custom_opentherm.svg)](https://GitHub.com/dhoeben/custom_opentherm/releases/) [![ESPHome version](https://img.shields.io/badge/Based_on_ESPHome-v2025.12.1-blue)](https://GitHub.com/esphome/esphome/releases/)
 
-This is a `custom_component` for ESPHome. It is mainly used in my creates OpenTherm Gateway. Feel free to use it as you require.
+This is a `custom_component` for ESPHome. It is mainly used in my OpenTherm Gateway. Feel free to use it as you require.
 
-
-Check out my OpenTherm Gatway: https://github.com/dhoeben/esp32-opentherm.
+### Other projects
+[Check out my OpenTherm Gatway] (https://github.com/dhoeben/esp32-opentherm)
 Check out my battery powered Themostat: https://github.com/dhoeben/esp32-thermostat.
 
 Feel free to also use my thermostat I created, which uses a E-ink display and is also fully customizable. Also has his own PCB you can just order! https://github.com/dhoeben/esp32-thermostat. 
