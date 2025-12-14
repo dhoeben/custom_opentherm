@@ -4,11 +4,8 @@
 This is a `custom_component` for ESPHome. It is mainly used in my OpenTherm Gateway. Feel free to use it as you require.
 
 ### Other projects
-[OpenTherm Gatway](https://github.com/dhoeben/esp32-opentherm)
+Feel free to check my other projects out as well: [OpenTherm Gatway](https://github.com/dhoeben/esp32-opentherm) and [Themostat](https://github.com/dhoeben/esp32-thermostat).
 
-[Themostat](https://github.com/dhoeben/esp32-thermostat)
-
-Feel free to also use my thermostat I created, which uses a E-ink display and is also fully customizable. Also has his own PCB you can just order! https://github.com/dhoeben/esp32-thermostat. 
 
 ### How to use
 Add this to your config file in ESPHome:
