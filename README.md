@@ -1,4 +1,5 @@
-# Custom OpenTherm Component [![GitHub release](https://img.shields.io/github/v/release/dhoeben/custom_opentherm.svg)](https://GitHub.com/dhoeben/custom_opentherm/releases/) [![ESPHome version](https://img.shields.io/badge/Based_on_ESPHome-v2025.12.1-blue)](https://GitHub.com/esphome/esphome/releases/)
+# Custom OpenTherm Component 
+[![GitHub release](https://img.shields.io/github/v/release/dhoeben/custom_opentherm.svg)](https://GitHub.com/dhoeben/custom_opentherm/releases/) [![ESPHome version](https://img.shields.io/badge/Based_on_ESPHome-v2025.12.1-blue)](https://GitHub.com/esphome/esphome/releases/)
 
 This is a `custom_component` for ESPHome. It is mainly used in my creates OpenTherm Gateway. Feel free to use it as you require.
 
