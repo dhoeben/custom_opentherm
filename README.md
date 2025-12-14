@@ -4,7 +4,7 @@
 This is a `custom_component` for ESPHome. It is mainly used in my OpenTherm Gateway. Feel free to use it as you require.
 
 ### Other projects
-Feel free to check my other projects out as well: [OpenTherm Gatway](https://github.com/dhoeben/esp32-opentherm) and [Themostat](https://github.com/dhoeben/esp32-thermostat).
+Feel free to check my other projects out as well: [OpenTherm Gateway](https://github.com/dhoeben/esp32-opentherm) and [Themostat](https://github.com/dhoeben/esp32-thermostat).
 
 
 ### How to use
