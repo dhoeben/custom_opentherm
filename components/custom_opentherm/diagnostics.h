@@ -1,62 +1,39 @@
 #pragma once
+
+#include <cstdint>
 #include <string>
 
-#include "definitions.h"
-#include "esphome/components/binary_sensor/binary_sensor.h"
-#include "esphome/components/sensor/sensor.h"
-#include "esphome/components/text_sensor/text_sensor.h"
+namespace custom_opentherm {
 
-namespace opentherm {
+class DiagnosticsController {
+ public:
+    DiagnosticsController() = default;
 
-class OpenThermComponent;
+    void reset();
 
-class DiagnosticsModule {
-   public:
-    void update(OpenThermComponent *ot);
-    bool process_message(uint8_t id, uint16_t data, float value);
+    void process_status_word(uint16_t status_word);
+    void process_oem_diagnostic(uint16_t raw);
 
-    bool is_dhw_active() const {
-        return dhw_active_state_;
-    }
+    bool fault_active() const;
+    bool service_required() const;
+    bool lockout_active() const;
 
-    void set_fault_sensor(esphome::binary_sensor::BinarySensor *s) {
-        fault_ = s;
-    }
-    void set_ch_active_sensor(esphome::binary_sensor::BinarySensor *s) {
-        ch_active_ = s;
-    }
-    void set_dhw_active_sensor(esphome::binary_sensor::BinarySensor *s) {
-        dhw_active_ = s;
-    }
-    void set_flame_sensor(esphome::binary_sensor::BinarySensor *s) {
-        flame_ = s;
-    }
-    void set_comms_ok_sensor(esphome::binary_sensor::BinarySensor *s) {
-        comms_ok_ = s;
-    }
+    bool ch_active() const;
+    bool dhw_active() const;
+    bool flame_on() const;
+    bool diagnostic_active() const;
 
-    void set_fault_text_sensor(esphome::text_sensor::TextSensor *s) {
-        fault_text_ = s;
-    }
-    void set_flow_rate_sensor(esphome::sensor::Sensor *s) {
-        flow_rate_ = s;
-    }
+    uint16_t raw_oem_error() const;
+    bool has_oem_error() const;
 
-   private:
-    esphome::binary_sensor::BinarySensor *fault_{nullptr};
-    esphome::binary_sensor::BinarySensor *ch_active_{nullptr};
-    esphome::binary_sensor::BinarySensor *dhw_active_{nullptr};
-    esphome::binary_sensor::BinarySensor *flame_{nullptr};
-    esphome::binary_sensor::BinarySensor *comms_ok_{nullptr};
+    std::string diagnostic_text() const;
 
-    esphome::text_sensor::TextSensor *fault_text_{nullptr};
-    esphome::sensor::Sensor          *flow_rate_{nullptr};
+ private:
+    uint16_t status_word_     = 0;
+    bool has_status_word_     = false;
 
-    uint32_t last_rx_time_{0};
-    bool     last_comms_state_{false};
-    bool     dhw_active_state_{false};
-
-    std::string decode_fault_flags(uint16_t data);
+    uint16_t raw_oem_error_   = 0;
+    bool has_oem_error_       = false;
 };
 
-}  // namespace opentherm
+}  // namespace custom_opentherm

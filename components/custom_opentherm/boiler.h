@@ -1,43 +1,34 @@
 #pragma once
-#include "definitions.h"
-#include "esphome/components/number/number.h"
-#include "esphome/components/sensor/sensor.h"
 
-namespace opentherm {
+#include <cstdint>
 
-class OpenThermComponent;
+namespace custom_opentherm {
 
-class BoilerModule {
-   public:
-    void setup();
-    void update(OpenThermComponent *ot);
-    bool process_message(uint8_t id, float value);
+class BoilerController {
+ public:
+    BoilerController() = default;
 
-    void set_temp_sensor(esphome::sensor::Sensor *s) {
-        temp_sensor_ = s;
-    }
-    void set_return_sensor(esphome::sensor::Sensor *s) {
-        return_sensor_ = s;
-    }
-    void set_modulation_sensor(esphome::sensor::Sensor *s) {
-        modulation_sensor_ = s;
-    }
-    void set_setpoint_sensor(esphome::sensor::Sensor *s) {
-        setpoint_sensor_ = s;
-    }
+    void reset();
 
-    void set_limit_number(esphome::number::Number *n) {
-        limit_number_ = n;
-    }
-    float get_limit_temp() const;
+    bool process_message(uint8_t did, uint16_t raw, float value);
 
-   private:
-    esphome::sensor::Sensor *temp_sensor_{nullptr};
-    esphome::sensor::Sensor *return_sensor_{nullptr};
-    esphome::sensor::Sensor *modulation_sensor_{nullptr};
-    esphome::sensor::Sensor *setpoint_sensor_{nullptr};
+    float flow_temp_c() const;
+    float return_temp_c() const;
+    float modulation_percent() const;
+    float pressure_bar() const;
 
-    esphome::number::Number *limit_number_{nullptr};
+    bool has_recent_data() const;
+
+ private:
+    float flow_temp_c_        = 0.0f;
+    float return_temp_c_      = 0.0f;
+    float modulation_percent_ = 0.0f;
+    float pressure_bar_       = 0.0f;
+
+    bool has_flow_temp_        = false;
+    bool has_return_temp_      = false;
+    bool has_modulation_       = false;
+    bool has_pressure_         = false;
 };
 
-}  // namespace opentherm
+}  // namespace custom_opentherm

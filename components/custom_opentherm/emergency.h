@@ -1,37 +1,23 @@
 #pragma once
-#include "esphome/components/switch/switch.h"
 
-namespace opentherm {
+namespace custom_opentherm {
 
-class EmergencyModule {
-   public:
-    bool is_active() const {
-        return active_;
-    }
-    float get_target() const {
-        return manual_target_;
-    }
+class EmergencyController {
+ public:
+    EmergencyController() = default;
 
-    void enable(bool state);
-    void set_target(float t) {
-        manual_target_ = t;
-    }
+    void set_enabled(bool enabled);
+    void set_target_c(float target_c);
 
-    void set_switches(esphome::switch_::Switch *em,
-                      esphome::switch_::Switch *force_heat,
-                      esphome::switch_::Switch *force_dhw) {
-        emergency_switch_  = em;
-        force_heat_switch_ = force_heat;
-        force_dhw_switch_  = force_dhw;
-    }
+    void set_fault_active(bool fault);
 
-   private:
-    bool active_{false};
-    float manual_target_{60.0f};
+    bool is_active() const;
+    float target_c() const;
 
-    esphome::switch_::Switch *emergency_switch_{nullptr};
-    esphome::switch_::Switch *force_heat_switch_{nullptr};
-    esphome::switch_::Switch *force_dhw_switch_{nullptr};
+ private:
+    bool enabled_      = false;
+    bool fault_active_ = false;
+    float target_c_    = 60.0f;
 };
 
-}  // namespace opentherm
+}

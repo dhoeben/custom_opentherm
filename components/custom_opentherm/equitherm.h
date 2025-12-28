@@ -1,43 +1,38 @@
 #pragma once
-#include "esphome/components/climate/climate.h"
-#include "esphome/components/number/number.h"
-#include "esphome/components/sensor/sensor.h"
 
-namespace opentherm {
+#include <cstdint>
 
-class EquithermModule {
-   public:
-    float calculate_target(float max_boiler_temp);
+namespace custom_opentherm {
 
-    void set_outdoor_sensor(esphome::sensor::Sensor *s) {
-        outdoor_ = s;
-    }
-    void set_indoor_sensor(esphome::sensor::Sensor *s) {
-        indoor_ = s;
-    }
-    void set_climate(esphome::climate::Climate *c) {
-        climate_ = c;
-    }
+class EquithermController {
+ public:
+    EquithermController() = default;
 
-    void set_params(esphome::number::Number *n,
-                    esphome::number::Number *k,
-                    esphome::number::Number *t,
-                    esphome::number::Number *fb) {
-        n_  = n;
-        k_  = k;
-        t_  = t;
-        fb_ = fb;
-    }
+    void set_parameters(float fb_gain, float k, float n, float t);
+    void set_limits(float min_c, float max_c);
 
-   private:
-    esphome::sensor::Sensor *outdoor_{nullptr};
-    esphome::sensor::Sensor *indoor_{nullptr};
-    esphome::climate::Climate *climate_{nullptr};
+    void set_outside_temp(float outside_c);
+    void set_room_temp(float room_c);
+    void set_room_setpoint(float setpoint_c);
 
-    esphome::number::Number *n_{nullptr};
-    esphome::number::Number *k_{nullptr};
-    esphome::number::Number *t_{nullptr};
-    esphome::number::Number *fb_{nullptr};
+    float compute_target(float boiler_limit_c) const;
+
+ private:
+    float fb_gain_ = 0.5f;
+    float k_       = 1.2f;
+    float n_       = 0.8f;
+    float t_       = 20.0f;
+
+    float min_c_ = 0.0f;
+    float max_c_ = 80.0f;
+
+    bool outside_valid_ = false;
+    bool room_valid_    = false;
+    bool setpoint_valid_ = false;
+
+    float outside_c_  = 0.0f;
+    float room_c_     = 0.0f;
+    float setpoint_c_ = 0.0f;
 };
 
-}  // namespace opentherm
+} //namespace custom_opentherm

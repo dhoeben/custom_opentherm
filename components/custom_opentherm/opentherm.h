@@ -1,161 +1,185 @@
 #pragma once
+
+#include <cstdint>
 #include <queue>
+#include <string>
+
+#include "esphome/core/component.h"
+#include "esphome/core/hal.h"
+
+#include "esphome/components/binary_sensor/binary_sensor.h"
+#include "esphome/components/climate/climate.h"
+#include "esphome/components/number/number.h"
+#include "esphome/components/sensor/sensor.h"
+#include "esphome/components/switch/switch.h"
+#include "esphome/components/text_sensor/text_sensor.h"
 
 #include "boiler.h"
-#include "definitions.h"
 #include "dhw.h"
 #include "diagnostics.h"
-#include "driver/gpio.h"
 #include "emergency.h"
 #include "equitherm.h"
-#include "esp_timer.h"
-#include "esphome.h"
+#include "protocol.h"
+#include "types.h"
 
-namespace opentherm {
+namespace custom_opentherm {
 
-enum class CompensationMode { EQUITHERM, BOILER };
+using GPIOPin      = esphome::GPIOPin;
+using Sensor       = esphome::sensor::Sensor;
+using Number       = esphome::number::Number;
+using BinarySensor = esphome::binary_sensor::BinarySensor;
+using TextSensor   = esphome::text_sensor::TextSensor;
+using Switch       = esphome::switch_::Switch;
+using Climate      = esphome::climate::Climate;
 
 class OpenThermComponent : public esphome::Component {
-   public:
-    OpenThermComponent();
+ public:
+    OpenThermComponent() = default;
 
     void setup() override;
     void loop() override;
 
-    BoilerModule boiler_;
-    DHWModule dhw_;
-    DiagnosticsModule diagnostics_;
-    EquithermModule equitherm_;
-    EmergencyModule emergency_;
-
-    bool tap_flow() const {
-        return diagnostics_.is_dhw_active();
+    void set_pins(GPIOPin *in_pin, GPIOPin *out_pin) {
+        in_pin_  = in_pin;
+        out_pin_ = out_pin;
     }
 
-    void send_request(uint8_t type, uint8_t id, uint16_t data);
+    void set_timing(const TimingConfig &timing) { timing_ = timing; }
+    void set_limits(const LimitsConfig &limits) { limits_ = limits; }
+    void set_debug(bool enabled) { debug_enabled_ = enabled; }
 
-    void enqueue_request(uint8_t did) {
-        request_queue_.push(did);
-    }
+    void bind_boiler_temp_sensor(Sensor *s) { boiler_temp_sensor_ = s; }
+    void bind_return_temp_sensor(Sensor *s) { return_temp_sensor_ = s; }
+    void bind_modulation_sensor(Sensor *s) { modulation_sensor_ = s; }
+    void bind_pressure_sensor(Sensor *s) { pressure_sensor_ = s; }
+    void bind_dhw_temp_sensor(Sensor *s) { dhw_temp_sensor_ = s; }
+    void bind_dhw_flow_rate_sensor(Sensor *s) { dhw_flow_rate_sensor_ = s; }
+    void bind_outside_temp_sensor(Sensor *s) { outside_temp_sensor_ = s; }
+    void bind_setpoint_sensor(Sensor *s) { setpoint_sensor_ = s; }
+    void bind_queue_depth_sensor(Sensor *s) { queue_depth_sensor_ = s; }
 
-    void set_boiler_temp_sensor(esphome::sensor::Sensor *s) {
-        boiler_.set_temp_sensor(s);
+    void bind_max_boiler_temp_heating_number(Number *n) {
+        max_boiler_temp_heating_number_ = n;
     }
-    void set_return_temp_sensor(esphome::sensor::Sensor *s) {
-        boiler_.set_return_sensor(s);
-    }
-    void set_modulation_sensor(esphome::sensor::Sensor *s) {
-        boiler_.set_modulation_sensor(s);
-    }
-    void set_setpoint_sensor(esphome::sensor::Sensor *s) {
-        boiler_.set_setpoint_sensor(s);
-    }
-    void set_boiler_limit_number(esphome::number::Number *n) {
-        boiler_.set_limit_number(n);
-    }
-
-    void set_dhw_temp_sensor(esphome::sensor::Sensor *s) {
-        dhw_.set_temp_sensor(s);
-    }
-    void set_dhw_setpoint_sensor(esphome::sensor::Sensor *s) {
-        dhw_.set_setpoint_sensor(s);
-    }
-    void set_dhw_limit_number(esphome::number::Number *n) {
-        dhw_.set_limit_number(n);
+    void bind_max_boiler_temp_water_number(Number *n) {
+        max_boiler_temp_water_number_ = n;
     }
 
-    void set_fault_binary_sensor(esphome::binary_sensor::BinarySensor *s) {
-        diagnostics_.set_fault_sensor(s);
-    }
-    void set_ch_active_binary_sensor(esphome::binary_sensor::BinarySensor *s) {
-        diagnostics_.set_ch_active_sensor(s);
-    }
-    void set_dhw_active_binary_sensor(esphome::binary_sensor::BinarySensor *s) {
-        diagnostics_.set_dhw_active_sensor(s);
-    }
-    void set_flame_binary_sensor(esphome::binary_sensor::BinarySensor *s) {
-        diagnostics_.set_flame_sensor(s);
-    }
-    void set_fault_text_sensor(esphome::text_sensor::TextSensor *s) {
-        diagnostics_.set_fault_text_sensor(s);
-    }
-    void set_dhw_flow_rate_sensor(esphome::sensor::Sensor *s) {
-        diagnostics_.set_flow_rate_sensor(s);
-    }
-    void set_comms_ok_binary_sensor(esphome::binary_sensor::BinarySensor *s) {
-        diagnostics_.set_comms_ok_sensor(s);
-    }
+    void bind_eq_fb_gain_number(Number *n) { eq_fb_gain_number_ = n; }
+    void bind_eq_k_number(Number *n) { eq_k_number_ = n; }
+    void bind_eq_n_number(Number *n) { eq_n_number_ = n; }
+    void bind_eq_t_number(Number *n) { eq_t_number_ = n; }
 
-    void set_ha_weather_sensor(esphome::sensor::Sensor *s) {
-        equitherm_.set_outdoor_sensor(s);
-    }
-    void set_ha_indoor_sensor(esphome::sensor::Sensor *s) {
-        equitherm_.set_indoor_sensor(s);
-    }
-    void set_adaptive_indoor_sensor(esphome::sensor::Sensor *s) {}
-    void set_climate_entity(esphome::climate::Climate *c) {
-        equitherm_.set_climate(c);
-    }
-    void set_dhw_climate_entity(esphome::climate::Climate *c) {
-        dhw_.set_climate(c);
-    }
+    void bind_ch_climate(Climate *c) { ch_climate_ = c; }
+    void bind_emergency_switch(Switch *s) { emergency_switch_ = s; }
+    void bind_force_heat_switch(Switch *s) { force_heat_switch_ = s; }
+    void bind_force_dhw_switch(Switch *s) { force_dhw_switch_ = s; }
 
-    void set_eq_params(esphome::number::Number *n,
-                       esphome::number::Number *k,
-                       esphome::number::Number *t,
-                       esphome::number::Number *fb) {
-        equitherm_.set_params(n, k, t, fb);
-    }
+    void bind_fault_binary(BinarySensor *b) { fault_binary_ = b; }
+    void bind_service_binary(BinarySensor *b) { service_binary_ = b; }
+    void bind_lockout_binary(BinarySensor *b) { lockout_binary_ = b; }
+    void bind_ch_active_binary(BinarySensor *b) { ch_active_binary_ = b; }
+    void bind_dhw_active_binary(BinarySensor *b) { dhw_active_binary_ = b; }
+    void bind_flame_on_binary(BinarySensor *b) { flame_on_binary_ = b; }
+    void bind_tap_flow_binary(BinarySensor *b) { tap_flow_binary_ = b; }
+    void bind_dhw_preheat_binary(BinarySensor *b) { dhw_preheat_binary_ = b; }
 
-    void set_emergency_switches(esphome::switch_::Switch *em,
-                                esphome::switch_::Switch *fh,
-                                esphome::switch_::Switch *fd) {
-        emergency_.set_switches(em, fh, fd);
-    }
+    void bind_mode_text(TextSensor *t) { mode_text_ = t; }
+    void bind_status_text(TextSensor *t) { status_text_ = t; }
+    void bind_boiler_status_text(TextSensor *t) { boiler_status_text_ = t; }
+    void bind_diagnostic_text(TextSensor *t) { diagnostic_text_ = t; }
 
-    void set_pins(esphome::InternalGPIOPin *in, esphome::InternalGPIOPin *out) {
-        in_pin_  = in;
-        out_pin_ = out;
-    }
-    void set_poll_interval(uint32_t ms) {
-        poll_interval_ms_ = ms;
-    }
-    void set_rx_timeout(uint32_t ms) {
-        rx_timeout_ms_ = ms;
-    }
-    void set_debug(bool dbg) {
-        debug_ = dbg;
-    }
+ protected:
+    void poll_();
+    void publish_();
 
-    static OpenThermComponent *get_singleton();
+    void refresh_runtime_inputs_();
+    void schedule_periodic_requests_();
+    void schedule_control_requests_();
 
-   private:
-    esphome::InternalGPIOPin *in_pin_{nullptr};
-    esphome::InternalGPIOPin *out_pin_{nullptr};
-    std::queue<uint8_t> request_queue_;
+    void enqueue_read_(uint8_t did);
+    void enqueue_write_(uint8_t did, uint16_t data);
+    void process_queue_();
 
-    uint32_t last_poll_ms_{0};
-    uint32_t last_req_ms_{0};
+    void dispatch_response_(uint8_t did, uint32_t response);
 
-    uint32_t poll_interval_ms_{10000};
-    uint32_t rx_timeout_ms_{1000};
-    bool debug_{false};
+    void update_comms_ok_(uint32_t now_ms);
+    void update_mode_text_();
 
-    uint32_t read_did(uint8_t did);
-    bool send_frame(uint32_t frame);
-    bool recv_frame(uint32_t &resp);
-    void process_response(uint8_t did, uint32_t response);
-    uint32_t build_request(uint8_t mt, uint8_t did, uint16_t data);
+    bool get_master_ch_enable_() const;
+    bool get_master_dhw_enable_() const;
 
-    static uint8_t parity32(uint32_t v);
-    void line_tx_level(bool high);
-    bool line_rx_level() const;
-    bool wait_us(uint32_t us);
-    void tx_manchester_bit(bool logical_one);
+ protected:
+    GPIOPin *in_pin_  = nullptr;
+    GPIOPin *out_pin_ = nullptr;
+
+    Sensor *boiler_temp_sensor_   = nullptr;
+    Sensor *return_temp_sensor_   = nullptr;
+    Sensor *modulation_sensor_    = nullptr;
+    Sensor *pressure_sensor_      = nullptr;
+    Sensor *dhw_temp_sensor_      = nullptr;
+    Sensor *dhw_flow_rate_sensor_ = nullptr;
+    Sensor *outside_temp_sensor_  = nullptr;
+    Sensor *setpoint_sensor_      = nullptr;
+    Sensor *queue_depth_sensor_   = nullptr;
+
+    Number *max_boiler_temp_heating_number_ = nullptr;
+    Number *max_boiler_temp_water_number_   = nullptr;
+
+    Number *eq_fb_gain_number_ = nullptr;
+    Number *eq_k_number_       = nullptr;
+    Number *eq_n_number_       = nullptr;
+    Number *eq_t_number_       = nullptr;
+
+    Climate *ch_climate_ = nullptr;
+
+    Switch *emergency_switch_  = nullptr;
+    Switch *force_heat_switch_ = nullptr;
+    Switch *force_dhw_switch_  = nullptr;
+
+    BinarySensor *fault_binary_       = nullptr;
+    BinarySensor *service_binary_     = nullptr;
+    BinarySensor *lockout_binary_     = nullptr;
+    BinarySensor *ch_active_binary_   = nullptr;
+    BinarySensor *dhw_active_binary_  = nullptr;
+    BinarySensor *flame_on_binary_    = nullptr;
+    BinarySensor *tap_flow_binary_    = nullptr;
+    BinarySensor *dhw_preheat_binary_ = nullptr;
+
+    TextSensor *mode_text_          = nullptr;
+    TextSensor *status_text_        = nullptr;
+    TextSensor *boiler_status_text_ = nullptr;
+    TextSensor *diagnostic_text_    = nullptr;
+
+    TimingConfig timing_;
+    LimitsConfig limits_;
+
+    OpenThermProtocol protocol_;
+    BoilerController boiler_;
+    DhwController dhw_;
+    DiagnosticsController diagnostics_;
+    EmergencyController emergency_;
+    EquithermController equitherm_;
+
+    std::queue<Request> high_prio_queue_;
+    std::queue<Request> low_prio_queue_;
+
+    static constexpr size_t MAX_LOW_PRIO_QUEUE = 16;
+
+    uint32_t last_poll_ms_     = 0;
+    uint32_t last_req_ms_      = 0;
+    uint32_t last_valid_rx_ms_ = 0;
+
+    uint32_t current_spacing_ms_ = 100;
+    static constexpr uint32_t SPACING_MIN_MS = 60;
+    static constexpr uint32_t SPACING_MAX_MS = 500;
+
+    bool comms_ok_      = false;
+    bool debug_enabled_ = false;
+
+    float last_outside_c_         = 0.0f;
+    bool outside_valid_           = false;
+    float last_target_setpoint_c_ = 0.0f;
 };
 
-extern CompensationMode g_compensation_mode;
-void set_compensation_mode(CompensationMode m);
-void set_compensation_mode_from_string(const std::string &s);
-
-}  // namespace opentherm
+}  // namespace custom_opentherm
