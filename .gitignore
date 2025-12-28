@@ -1,5 +1,7 @@
 # Byte-compiled / optimized / DLL files
 __pycache__/
+/compontents/custom_opentherm/__pycache__
+/compontents/custom_opentherm/__pycache__/
 *.py[cod]
 *$py.class
 
