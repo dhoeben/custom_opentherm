@@ -1,69 +1,58 @@
 #include "boiler.h"
 
-#include "definitions.h"
+#include "esphome/core/log.h"
+#include "opentherm.h"
 
-namespace custom_opentherm {
+namespace opentherm {
 
-void BoilerController::reset() {
-    flow_temp_c_        = 0.0f;
-    return_temp_c_      = 0.0f;
-    modulation_percent_ = 0.0f;
-    pressure_bar_       = 0.0f;
+static const char *const TAG = "ot_boiler";
 
-    has_flow_temp_   = false;
-    has_return_temp_ = false;
-    has_modulation_  = false;
-    has_pressure_    = false;
+void BoilerModule::setup() {
+    if (limit_number_) {
+        if (!limit_number_->has_state()) {
+            limit_number_->publish_state(60.0f);
+        }
+    }
 }
 
-bool BoilerController::process_message(uint8_t did, uint16_t, float value) {
-    switch (did) {
-        case OT_MSG_CH_WATER_TEMP:
-            flow_temp_c_  = value;
-            has_flow_temp_ = true;
-            return true;
+void BoilerModule::update(OpenThermComponent *ot) {
+    ot->enqueue_request(OT_MSG_CH_WATER_TEMP);
+    ot->enqueue_request(OT_MSG_RETURN_WATER_TEMP);
 
-        case OT_MSG_RETURN_WATER_TEMP:
-            return_temp_c_  = value;
-            has_return_temp_ = true;
-            return true;
+    ot->enqueue_request(0x18);
+    ot->enqueue_request(0x19);
 
+    ot->enqueue_request(OT_MSG_REL_MOD_LEVEL);
+    ot->enqueue_request(OT_MSG_SOLAR_STORAGE);
+}
+
+bool BoilerModule::process_message(uint8_t id, float value) {
+    switch (id) {
+        case 0x18:
+            if (temp_sensor_) temp_sensor_->publish_state(value);
+            return true;
+        case 0x19:
+            if (return_sensor_) return_sensor_->publish_state(value);
+            return true;
         case OT_MSG_REL_MOD_LEVEL:
-            modulation_percent_ = value;
-            has_modulation_     = true;
-            return true;
+            if (modulation_sensor_) modulation_sensor_->publish_state(value);
 
-        case OT_MSG_CH_WATER_PRESSURE:
-            pressure_bar_ = value;
-            has_pressure_ = true;
+            if (setpoint_sensor_) setpoint_sensor_->publish_state(value);
             return true;
+        case OT_MSG_SOLAR_STORAGE:
 
+            if (modulation_sensor_) modulation_sensor_->publish_state(value);
+            return true;
         default:
             return false;
     }
 }
 
-float BoilerController::flow_temp_c() const {
-    return flow_temp_c_;
+float BoilerModule::get_limit_temp() const {
+    if (limit_number_ && limit_number_->has_state()) {
+        return limit_number_->state;
+    }
+    return 60.0f;
 }
 
-float BoilerController::return_temp_c() const {
-    return return_temp_c_;
-}
-
-float BoilerController::modulation_percent() const {
-    return modulation_percent_;
-}
-
-float BoilerController::pressure_bar() const {
-    return pressure_bar_;
-}
-
-bool BoilerController::has_recent_data() const {
-    return has_flow_temp_ ||
-           has_return_temp_ ||
-           has_modulation_ ||
-           has_pressure_;
-}
-
-}  // namespace custom_opentherm
+}  // namespace opentherm

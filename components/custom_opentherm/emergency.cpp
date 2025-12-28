@@ -1,25 +1,16 @@
 #include "emergency.h"
 
-namespace custom_opentherm {
+#include "esphome/core/log.h"
 
-void EmergencyController::set_enabled(bool enabled) {
-    enabled_ = enabled;
+namespace opentherm {
+
+void EmergencyModule::enable(bool state) {
+    active_ = state;
+    ESP_LOGW("ot_emergency", "Emergency mode: %s", state ? "ON" : "OFF");
+
+    if (emergency_switch_ && emergency_switch_->state != state) {
+        emergency_switch_->publish_state(state);
+    }
 }
 
-void EmergencyController::set_target_c(float target_c) {
-    target_c_ = target_c;
-}
-
-void EmergencyController::set_fault_active(bool fault) {
-    fault_active_ = fault;
-}
-
-bool EmergencyController::is_active() const {
-    return enabled_ || fault_active_;
-}
-
-float EmergencyController::target_c() const {
-    return target_c_;
-}
-
-}
+}  // namespace opentherm
