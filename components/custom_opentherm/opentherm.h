@@ -47,6 +47,7 @@ class OpenThermComponent : public esphome::Component {
     void set_timing(const TimingConfig &timing) { timing_ = timing; }
     void set_limits(const LimitsConfig &limits) { limits_ = limits; }
     void set_debug(bool enabled) { debug_enabled_ = enabled; }
+    void set_dhw_preheat_enabled(bool enabled);
 
     void bind_boiler_temp_sensor(Sensor *s) { boiler_temp_sensor_ = s; }
     void bind_return_temp_sensor(Sensor *s) { return_temp_sensor_ = s; }
@@ -176,6 +177,9 @@ class OpenThermComponent : public esphome::Component {
 
     bool comms_ok_      = false;
     bool debug_enabled_ = false;
+
+    bool dhw_preheat_enabled_ = true;
+    bool last_sent_dhw_preheat_enabled_ = true;
 
     float last_outside_c_         = 0.0f;
     bool outside_valid_           = false;

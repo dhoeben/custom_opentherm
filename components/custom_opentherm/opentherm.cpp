@@ -104,6 +104,10 @@ bool OpenThermComponent::get_master_dhw_enable_() const {
     return false;
 }
 
+void OpenThermComponent::set_dhw_preheat_enabled(bool enabled) {
+    dhw_preheat_enabled_ = enabled;
+}
+
 void OpenThermComponent::schedule_control_requests_() {
     if (outside_valid_) {
         equitherm_.set_outside_temp(last_outside_c_);
@@ -132,6 +136,19 @@ void OpenThermComponent::schedule_control_requests_() {
 
     enqueue_write_(OT_MSG_STATUS, static_cast<uint16_t>(hb) << 8);
     enqueue_write_(OT_MSG_T_SET, static_cast<uint16_t>(target_c * 256.0f));
+
+    if (dhw_preheat_enabled_ != last_sent_dhw_preheat_enabled_) {
+        enqueue_write_(OT_MSG_DHW_COMFORT,
+                       dhw_preheat_enabled_ ? 1u : 0u);
+
+        last_sent_dhw_preheat_enabled_ = dhw_preheat_enabled_;
+
+        if (debug_enabled_) {
+            ESP_LOGD(TAG,
+                     "DHW preheat %s",
+                     dhw_preheat_enabled_ ? "ENABLED" : "DISABLED");
+        }
+    }
 }
 
 void OpenThermComponent::enqueue_read_(uint8_t did) {
