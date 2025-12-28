@@ -1,57 +1,38 @@
 #pragma once
-#include "definitions.h"
-#include "esphome/components/climate/climate.h"
-#include "esphome/components/number/number.h"
-#include "esphome/components/sensor/sensor.h"
 
-namespace opentherm {
+#include <cstdint>
 
-class OpenThermComponent;
+namespace custom_opentherm {
 
-enum class DHWMode { OFF, ECO, HEAT };
+class DhwController {
+ public:
+    DhwController() = default;
 
-class DHWModule {
-   public:
-    void setup();
-    void update(OpenThermComponent *ot);
-    bool process_message(uint8_t id, uint16_t data, float value);
+    void reset();
 
-    void set_temp_sensor(esphome::sensor::Sensor *s) {
-        temp_sensor_ = s;
-    }
-    void set_setpoint_sensor(esphome::sensor::Sensor *s) {
-        setpoint_sensor_ = s;
-    }
-    void set_limit_number(esphome::number::Number *n) {
-        limit_number_ = n;
-    }
-    void set_climate(esphome::climate::Climate *c) {
-        climate_ = c;
-    }
+    bool process_message(uint8_t did, uint16_t raw, float value_c);
 
-    void set_forced(bool forced) {
-        forced_ = forced;
-    }
-    void set_mode(DHWMode mode) {
-        mode_ = mode;
-    }
+    float temperature_c() const;
+    float flow_rate_l_min() const;
 
-    float get_limit_temp() const;
-    bool  is_active() const {
-        return comfort_mode_enabled_;
-    }
+    bool tap_flow_active() const;
+    bool preheat_active() const;
 
-   private:
-    esphome::sensor::Sensor   *temp_sensor_{nullptr};
-    esphome::sensor::Sensor   *setpoint_sensor_{nullptr};
-    esphome::number::Number   *limit_number_{nullptr};
-    esphome::climate::Climate *climate_{nullptr};
+    bool has_temp() const;
+    bool has_flow_rate() const;
 
-    bool    forced_{false};
-    DHWMode mode_{DHWMode::HEAT};
-    bool    comfort_mode_enabled_{true};
+    void set_tap_flow_threshold_l_min(float threshold);
 
-    void send_comfort_setting(OpenThermComponent *ot, bool enable);
+ private:
+    float temperature_c_      = 0.0f;
+    float flow_rate_l_min_    = 0.0f;
+
+    bool has_temp_            = false;
+    bool has_flow_rate_       = false;
+
+    bool preheat_active_      = false;
+
+    float tap_flow_threshold_ = 0.2f;
 };
 
-}  // namespace opentherm
+}  // namespace custom_opentherm
