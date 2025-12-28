@@ -1,51 +1,28 @@
 #include "equitherm.h"
 
-#include <algorithm>
 #include <cmath>
 
-namespace custom_opentherm {
+namespace opentherm {
 
-void EquithermController::set_parameters(float fb_gain, float k, float n, float t) {
-    fb_gain_ = fb_gain;
-    k_       = k;
-    n_       = n;
-    t_       = t;
-}
+float EquithermModule::calculate_target(float max_boiler_temp) {
+    float t_out = (outdoor_ && outdoor_->has_state()) ? outdoor_->state : 10.0f;
+    float t_in  = (indoor_ && indoor_->has_state()) ? indoor_->state : 20.0f;
+    float t_set = (climate_) ? climate_->target_temperature : 21.0f;
 
-void EquithermController::set_limits(float min_c, float max_c) {
-    min_c_ = min_c;
-    max_c_ = max_c;
-}
+    float n_val  = (n_ && n_->has_state()) ? n_->state : 1.14f;
+    float k_val  = (k_ && k_->has_state()) ? k_->state : 4.0f;
+    float t_val  = (t_ && t_->has_state()) ? t_->state : 20.2f;
+    float fb_val = (fb_ && fb_->has_state()) ? fb_->state : 2.0f;
 
-void EquithermController::set_outside_temp(float outside_c) {
-    outside_c_     = outside_c;
-    outside_valid_ = true;
-}
+    float base = (n_val * (t_set + k_val - t_out)) + t_val;
 
-void EquithermController::set_room_temp(float room_c) {
-    room_c_     = room_c;
-    room_valid_ = true;
-}
+    float delta  = t_set - t_in;
+    float target = base + (delta * fb_val);
 
-void EquithermController::set_room_setpoint(float setpoint_c) {
-    setpoint_c_      = setpoint_c;
-    setpoint_valid_  = true;
-}
+    if (target < 10.0f) target = 10.0f;
+    if (target > max_boiler_temp) target = max_boiler_temp;
 
-float EquithermController::compute_target(float boiler_limit_c) const {
-    if (!outside_valid_) {
-        return min_c_;
-    }
-
-    float target = t_ + k_ * std::pow((t_ - outside_c_), n_);
-
-    if (room_valid_ && setpoint_valid_) {
-        const float error = setpoint_c_ - room_c_;
-        target += fb_gain_ * error;
-    }
-
-    target = std::clamp(target, min_c_, std::min(max_c_, boiler_limit_c));
     return target;
 }
 
-}
+}  // namespace opentherm
