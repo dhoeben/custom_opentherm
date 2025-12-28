@@ -24,13 +24,20 @@
 
 namespace custom_opentherm {
 
-using GPIOPin      = esphome::GPIOPin;
-using Sensor       = esphome::sensor::Sensor;
-using Number       = esphome::number::Number;
-using BinarySensor = esphome::binary_sensor::BinarySensor;
-using TextSensor   = esphome::text_sensor::TextSensor;
-using Switch       = esphome::switch_::Switch;
-using Climate      = esphome::climate::Climate;
+using GPIOPin       = esphome::GPIOPin;
+using Sensor        = esphome::sensor::Sensor;
+using Number        = esphome::number::Number;
+using BinarySensor  = esphome::binary_sensor::BinarySensor;
+using TextSensor    = esphome::text_sensor::TextSensor;
+using Switch        = esphome::switch_::Switch;
+using Climate       = esphome::climate::Climate;
+using ClimatePreset = esphome::climate::ClimatePreset;
+
+enum class ChPreset {
+    ECO,
+    COMFORT,
+    BOOST
+};
 
 class OpenThermComponent : public esphome::Component {
  public:
@@ -47,7 +54,9 @@ class OpenThermComponent : public esphome::Component {
     void set_timing(const TimingConfig &timing) { timing_ = timing; }
     void set_limits(const LimitsConfig &limits) { limits_ = limits; }
     void set_debug(bool enabled) { debug_enabled_ = enabled; }
+
     void set_dhw_preheat_enabled(bool enabled);
+    void set_ch_ha_preset(ClimatePreset preset);
 
     void bind_boiler_temp_sensor(Sensor *s) { boiler_temp_sensor_ = s; }
     void bind_return_temp_sensor(Sensor *s) { return_temp_sensor_ = s; }
@@ -134,6 +143,8 @@ class OpenThermComponent : public esphome::Component {
     Number *eq_t_number_       = nullptr;
 
     Climate *ch_climate_ = nullptr;
+    ClimatePreset ch_preset_ = ClimatePreset::CLIMATE_PRESET_NONE;
+    ChPreset ch_preset_mapped_ = ChPreset::COMFORT;
 
     Switch *emergency_switch_  = nullptr;
     Switch *force_heat_switch_ = nullptr;
