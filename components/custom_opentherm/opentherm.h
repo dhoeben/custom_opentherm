@@ -84,6 +84,7 @@ class OpenThermComponent : public esphome::Component {
     void bind_flame_on_binary(BinarySensor *b) { flame_on_binary_ = b; }
     void bind_tap_flow_binary(BinarySensor *b) { tap_flow_binary_ = b; }
     void bind_dhw_preheat_binary(BinarySensor *b) { dhw_preheat_binary_ = b; }
+    void bind_comms_ok_binary(BinarySensor *b) { comms_ok_binary_ = b; }
 
     void bind_mode_text(TextSensor *t) { mode_text_ = t; }
     void bind_status_text(TextSensor *t) { status_text_ = t; }
@@ -146,6 +147,7 @@ class OpenThermComponent : public esphome::Component {
     BinarySensor *flame_on_binary_    = nullptr;
     BinarySensor *tap_flow_binary_    = nullptr;
     BinarySensor *dhw_preheat_binary_ = nullptr;
+    BinarySensor *comms_ok_binary_    = nullptr;
 
     TextSensor *mode_text_          = nullptr;
     TextSensor *status_text_        = nullptr;

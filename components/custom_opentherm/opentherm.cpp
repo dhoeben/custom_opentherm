@@ -272,6 +272,8 @@ void OpenThermComponent::publish_() {
     if (status_text_ != nullptr) status_text_->publish_state(diagnostics_.diagnostic_text());
     if (boiler_status_text_ != nullptr) boiler_status_text_->publish_state(diagnostics_.diagnostic_text());
     if (diagnostic_text_ != nullptr) diagnostic_text_->publish_state(diagnostics_.diagnostic_text());
+    if (comms_ok_binary_ != nullptr)comms_ok_binary_->publish_state(comms_ok_);
+
 }
 
 }  // namespace custom_opentherm
