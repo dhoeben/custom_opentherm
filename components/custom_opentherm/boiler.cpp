@@ -1,68 +1,62 @@
-#include "boiler.h"
+#include "dhw.h"
 #include "definitions.h"
 
 namespace custom_opentherm {
 
-void BoilerController::reset() {
-    flow_temp_c_        = 0.0f;
-    return_temp_c_      = 0.0f;
-    modulation_percent_ = 0.0f;
-    pressure_bar_       = 0.0f;
+void DhwController::reset() {
+    temperature_c_   = 0.0f;
+    flow_rate_l_min_ = 0.0f;
+    tap_flow_active_ = false;
+    preheat_active_  = false;
 
-    has_flow_temp_   = false;
-    has_return_temp_ = false;
-    has_modulation_  = false;
-    has_pressure_    = false;
+    has_temperature_ = false;
+    has_flow_rate_   = false;
 }
 
-bool BoilerController::process_message(uint8_t did, uint16_t, float value) {
+bool DhwController::process_message(uint8_t did, uint16_t raw, float value) {
     switch (did) {
-        case opentherm::OT_MSG_CH_WATER_TEMP:
-            flow_temp_c_   = value;
-            has_flow_temp_ = true;
+        case opentherm::OT_MSG_DHW_TEMP:
+            temperature_c_   = value;
+            has_temperature_ = true;
             return true;
 
-        case opentherm::OT_MSG_RETURN_WATER_TEMP:
-            return_temp_c_   = value;
-            has_return_temp_ = true;
+        case opentherm::OT_MSG_DHW_FLOW_RATE:
+            flow_rate_l_min_ = value;
+            has_flow_rate_   = true;
+            tap_flow_active_ = value > 0.1f;
             return true;
 
-        case opentherm::OT_MSG_REL_MOD_LEVEL:
-            modulation_percent_ = value;
-            has_modulation_     = true;
-            return true;
+        case opentherm::OT_MSG_STATUS: {
+            const bool dhw_active =
+                (raw & (1u << 1)) != 0;
 
-        case opentherm::OT_MSG_CH_WATER_PRESSURE:
-            pressure_bar_ = value;
-            has_pressure_ = true;
+            preheat_active_ = dhw_active && !tap_flow_active_;
             return true;
+        }
 
         default:
             return false;
     }
 }
 
-float BoilerController::flow_temp_c() const {
-    return flow_temp_c_;
+float DhwController::temperature_c() const {
+    return temperature_c_;
 }
 
-float BoilerController::return_temp_c() const {
-    return return_temp_c_;
+float DhwController::flow_rate_l_min() const {
+    return flow_rate_l_min_;
 }
 
-float BoilerController::modulation_percent() const {
-    return modulation_percent_;
+bool DhwController::tap_flow_active() const {
+    return tap_flow_active_;
 }
 
-float BoilerController::pressure_bar() const {
-    return pressure_bar_;
+bool DhwController::preheat_active() const {
+    return preheat_active_;
 }
 
-bool BoilerController::has_recent_data() const {
-    return has_flow_temp_ ||
-           has_return_temp_ ||
-           has_modulation_ ||
-           has_pressure_;
+bool DhwController::has_recent_data() const {
+    return has_temperature_ || has_flow_rate_;
 }
 
 }  // namespace custom_opentherm
