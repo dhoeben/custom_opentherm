@@ -255,7 +255,7 @@ void OpenThermComponent::process_queue_() {
     bool ok = false;
 
     if (req.kind == RequestKind::Write) {
-        ok = protocol_.write_blocking(req.did, req.data);
+        ok = protocol_.write(req.did, req.data);
         if (ok) {
             current_spacing_ms_ = std::max(SPACING_MIN_MS, current_spacing_ms_ - SPACING_DECREASE_OK_MS);
         } else {
@@ -265,7 +265,7 @@ void OpenThermComponent::process_queue_() {
     }
 
     uint32_t resp = 0;
-    ok            = protocol_.read_blocking(req.did, resp);
+    ok            = protocol_.read(req.did, resp);
 
     if (ok) {
         last_valid_rx_ms_   = now;
