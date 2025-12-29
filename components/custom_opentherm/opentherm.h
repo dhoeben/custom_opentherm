@@ -74,6 +74,13 @@ class OpenThermComponent : public esphome::Component {
     void bind_max_boiler_temp_water_number(Number *n) {
         max_boiler_temp_water_number_ = n;
     }
+    void set_poll_interval_ms(uint32_t ms) {
+        timing_.poll_interval_ms = ms;
+}
+
+    void set_rx_timeout_ms(uint32_t ms) {
+        timing_.rx_timeout_ms = ms;
+    }
 
     void bind_eq_fb_gain_number(Number *n) { eq_fb_gain_number_ = n; }
     void bind_eq_k_number(Number *n) { eq_k_number_ = n; }
