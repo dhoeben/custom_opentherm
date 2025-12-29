@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <cstdint>
 #include <string>
+#include <cmath>
 
 #include "definitions.h"
 #include "esphome/core/log.h"
@@ -170,10 +171,10 @@ void OpenThermComponent::schedule_control_requests_() {
     }
 
     if (ch_climate_ != nullptr) {
-        if (!isnan(ch_climate_->current_temperature)) {
+        if (!std::isnan(ch_climate_->current_temperature)) {
             equitherm_.set_room_temp(ch_climate_->current_temperature);
         }
-        if (!isnan(ch_climate_->target_temperature)) {
+        if (!std::isnan(ch_climate_->target_temperature)) {
             equitherm_.set_room_setpoint(ch_climate_->target_temperature);
         }
     }
