@@ -12,7 +12,8 @@ static const char *const TAG = "custom_opentherm.protocol";
 static constexpr uint32_t HALF_BIT_US = 500;
 static constexpr uint32_t BIT_US      = 1000;
 
-void OpenThermProtocol::set_pins(GPIOPin *in_pin, GPIOPin *out_pin) {
+void OpenThermProtocol::set_pins(esphome::GPIOPin *in_pin,
+                                esphome::GPIOPin *out_pin) {
     in_pin_  = in_pin;
     out_pin_ = out_pin;
 }
