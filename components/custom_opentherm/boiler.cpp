@@ -1,5 +1,4 @@
 #include "boiler.h"
-
 #include "definitions.h"
 
 namespace custom_opentherm {
@@ -18,22 +17,22 @@ void BoilerController::reset() {
 
 bool BoilerController::process_message(uint8_t did, uint16_t, float value) {
     switch (did) {
-        case OT_MSG_CH_WATER_TEMP:
-            flow_temp_c_  = value;
+        case opentherm::OT_MSG_CH_WATER_TEMP:
+            flow_temp_c_   = value;
             has_flow_temp_ = true;
             return true;
 
-        case OT_MSG_RETURN_WATER_TEMP:
-            return_temp_c_  = value;
+        case opentherm::OT_MSG_RETURN_WATER_TEMP:
+            return_temp_c_   = value;
             has_return_temp_ = true;
             return true;
 
-        case OT_MSG_REL_MOD_LEVEL:
+        case opentherm::OT_MSG_REL_MOD_LEVEL:
             modulation_percent_ = value;
             has_modulation_     = true;
             return true;
 
-        case OT_MSG_CH_WATER_PRESSURE:
+        case opentherm::OT_MSG_CH_WATER_PRESSURE:
             pressure_bar_ = value;
             has_pressure_ = true;
             return true;
