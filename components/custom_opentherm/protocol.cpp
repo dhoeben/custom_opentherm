@@ -1,6 +1,9 @@
 #include "protocol.h"
 
 #include "esphome/core/log.h"
+#include "esphome/core/hal.h"
+
+#include <esp_timer.h>
 
 namespace custom_opentherm {
 
@@ -25,12 +28,22 @@ void OpenThermProtocol::set_debug(bool enabled) {
 void OpenThermProtocol::setup() {
     if (in_pin_) {
         in_pin_->setup();
-        in_pin_->pin_mode(gpio::FLAG_INPUT);
+        in_pin_->pin_mode(esphome::gpio::FLAG_INPUT);
     }
+
     if (out_pin_) {
         out_pin_->setup();
+        out_pin_->pin_mode(esphome::gpio::FLAG_OUTPUT);
         idle_line_();
     }
+}
+
+bool OpenThermProtocol::read(uint8_t did, uint32_t &response) {
+    return read_blocking(did, response);
+}
+
+bool OpenThermProtocol::write(uint8_t did, uint16_t data) {
+    return write_blocking(did, data);
 }
 
 bool OpenThermProtocol::read_blocking(uint8_t did, uint32_t &response) {
@@ -101,6 +114,7 @@ bool OpenThermProtocol::line_rx_level_() const {
 void OpenThermProtocol::wait_us_(uint32_t us) const {
     const int64_t start = esp_timer_get_time();
     while ((esp_timer_get_time() - start) < static_cast<int64_t>(us)) {
+        // busy wait
     }
 }
 
