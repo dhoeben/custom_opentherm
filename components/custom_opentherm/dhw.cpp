@@ -5,28 +5,28 @@
 namespace custom_opentherm {
 
 void DhwController::reset() {
-    temperature_c_      = 0.0f;
-    flow_rate_l_min_    = 0.0f;
+    temperature_c_   = 0.0f;
+    flow_rate_l_min_ = 0.0f;
 
-    has_temp_           = false;
-    has_flow_rate_      = false;
+    has_temp_      = false;
+    has_flow_rate_ = false;
 
-    preheat_active_     = false;
+    preheat_active_ = false;
 }
 
 bool DhwController::process_message(uint8_t did, uint16_t raw, float value_c) {
     switch (did) {
-        case OT_MSG_DHW_TEMP:
+        case opentherm::OT_MSG_DHW_TEMP:
             temperature_c_ = value_c;
             has_temp_      = true;
             return true;
 
-        case OT_MSG_DHW_FLOW_RATE:
+        case opentherm::OT_MSG_DHW_FLOW_RATE:
             flow_rate_l_min_ = value_c;
             has_flow_rate_   = true;
             return true;
 
-        case OT_MSG_STATUS: {
+        case opentherm::OT_MSG_STATUS: {
             const uint8_t lb = static_cast<uint8_t>(raw & 0xFF);
 
             const bool dhw_active = ((lb >> 2) & 0x01u) != 0;
